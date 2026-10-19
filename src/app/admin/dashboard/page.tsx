@@ -42,7 +42,11 @@ import {
   RotateCcw,
   Truck,
   Download,
-  Filter
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 
 interface InquiryItem {
@@ -59,6 +63,149 @@ interface SubscriberItem {
   _id?: string;
   email: string;
   createdAt: string;
+}
+
+// Reusable Luxury Pagination Component (10 items/page, 5 page window navigation)
+interface PaginationBarProps {
+  currentPage: number;
+  totalItems: number;
+  pageSize?: number;
+  onPageChange: (page: number) => void;
+  itemLabel?: string;
+}
+
+function PaginationBar({
+  currentPage,
+  totalItems,
+  pageSize = 10,
+  onPageChange,
+  itemLabel = 'records',
+}: PaginationBarProps) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+
+  if (totalItems <= pageSize && totalPages <= 1) {
+    if (totalItems === 0) return null;
+    return (
+      <div className="d-flex justify-content-between align-items-center py-2 px-3 bg-light rounded-3 border mt-3 small text-muted">
+        <span>Showing all {totalItems} {itemLabel}</span>
+        <span className="badge bg-white text-dark border">Page 1 of 1</span>
+      </div>
+    );
+  }
+
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  // Compute 5-page button window (e.g. 1 2 3 4 5, then slides to next set)
+  const getPageNumbers = () => {
+    const maxButtons = 5;
+    if (totalPages <= maxButtons) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxButtons - 1);
+    if (end - start < maxButtons - 1) {
+      start = Math.max(1, end - maxButtons + 1);
+    }
+    const pages: number[] = [];
+    for (let p = start; p <= end; p++) {
+      pages.push(p);
+    }
+    return pages;
+  };
+
+  const pages = getPageNumbers();
+
+  return (
+    <div className="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2.5 py-2.5 px-3 bg-light rounded-3 border mt-3">
+      {/* Informative Item Count */}
+      <div className="small text-muted text-center text-sm-start">
+        Showing <span className="fw-semibold text-dark">{startItem}</span> - <span className="fw-semibold text-dark">{endItem}</span> of <span className="fw-semibold text-dark">{totalItems}</span> {itemLabel}
+        <span className="ms-2 badge bg-white text-dark border" style={{ fontSize: '0.72rem' }}>
+          Page {currentPage} of {totalPages}
+        </span>
+      </div>
+
+      {/* 5-Page Window Navigation Bar */}
+      <div className="d-flex align-items-center gap-1 flex-wrap justify-content-center">
+        {/* First Page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center p-1"
+          style={{ width: '30px', height: '30px', borderRadius: '6px' }}
+          title="First Page"
+        >
+          <ChevronsLeft size={14} />
+        </button>
+
+        {/* Previous Page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center px-2 py-1 gap-1"
+          style={{ height: '30px', borderRadius: '6px', fontSize: '0.78rem' }}
+          title="Previous Page"
+        >
+          <ChevronLeft size={13} />
+          <span className="d-none d-md-inline">Prev</span>
+        </button>
+
+        {/* 5 Page Buttons */}
+        {pages.map((p) => {
+          const isActive = p === currentPage;
+          return (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPageChange(p)}
+              className="btn btn-sm d-flex align-items-center justify-content-center fw-semibold"
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '6px',
+                fontSize: '0.78rem',
+                backgroundColor: isActive ? '#1A1816' : '#FFFFFF',
+                color: isActive ? '#C5A880' : '#1A1816',
+                border: isActive ? '1px solid #1A1816' : '1px solid #D5C7B5',
+                boxShadow: isActive ? '0 2px 4px rgba(0,0,0,0.15)' : 'none',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {p}
+            </button>
+          );
+        })}
+
+        {/* Next Page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center px-2 py-1 gap-1"
+          style={{ height: '30px', borderRadius: '6px', fontSize: '0.78rem' }}
+          title="Next Page"
+        >
+          <span className="d-none d-md-inline">Next</span>
+          <ChevronRight size={13} />
+        </button>
+
+        {/* Last Page */}
+        <button
+          type="button"
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center p-1"
+          style={{ width: '30px', height: '30px', borderRadius: '6px' }}
+          title="Last Page"
+        >
+          <ChevronsRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function AdminDashboardPage() {
@@ -88,6 +235,13 @@ export default function AdminDashboardPage() {
   const [inquirySearch, setInquirySearch] = useState('');
   const [copiedEmails, setCopiedEmails] = useState(false);
 
+  // Pagination States (10 items per page with 5-page window)
+  const [orderPage, setOrderPage] = useState(1);
+  const [reviewPage, setReviewPage] = useState(1);
+  const [subscriberPage, setSubscriberPage] = useState(1);
+  const [reportPage, setReportPage] = useState(1);
+  const [deliveredAuditPage, setDeliveredAuditPage] = useState(1);
+
   // Charts & Reports state
   const [salesChartPeriod, setSalesChartPeriod] = useState<'monthly' | 'daily'>('monthly');
   const [hoveredSalesPoint, setHoveredSalesPoint] = useState<number | null>(null);
@@ -103,6 +257,27 @@ export default function AdminDashboardPage() {
   const [deliveredDateTo, setDeliveredDateTo] = useState('');
   const [deliveredSearchQuery, setDeliveredSearchQuery] = useState('');
   const [headerTime, setHeaderTime] = useState('');
+
+  // Auto-reset page numbers on filter/search changes
+  useEffect(() => {
+    setOrderPage(1);
+  }, [orderFilterStatus, orderSearch]);
+
+  useEffect(() => {
+    setReviewPage(1);
+  }, [reviewProductFilter, reviewSearch]);
+
+  useEffect(() => {
+    setSubscriberPage(1);
+  }, [subscribers.length]);
+
+  useEffect(() => {
+    setReportPage(1);
+  }, [reportView, reportCustomFrom, reportCustomTo]);
+
+  useEffect(() => {
+    setDeliveredAuditPage(1);
+  }, [deliveredSearchQuery, deliveredDateFrom, deliveredDateTo]);
 
   // Add Product Form Modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -736,6 +911,37 @@ export default function AdminDashboardPage() {
     };
   }, [orders, deliveredDateFrom, deliveredDateTo, deliveredSearchQuery]);
 
+  // Paginated Data Slices (10 items per page)
+  const ORDERS_PER_PAGE = 10;
+  const paginatedOrders = useMemo(() => {
+    const start = (orderPage - 1) * ORDERS_PER_PAGE;
+    return filteredOrders.slice(start, start + ORDERS_PER_PAGE);
+  }, [filteredOrders, orderPage]);
+
+  const REVIEWS_PER_PAGE = 10;
+  const paginatedReviews = useMemo(() => {
+    const start = (reviewPage - 1) * REVIEWS_PER_PAGE;
+    return filteredReviews.slice(start, start + REVIEWS_PER_PAGE);
+  }, [filteredReviews, reviewPage]);
+
+  const SUBSCRIBERS_PER_PAGE = 10;
+  const paginatedSubscribers = useMemo(() => {
+    const start = (subscriberPage - 1) * SUBSCRIBERS_PER_PAGE;
+    return subscribers.slice(start, start + SUBSCRIBERS_PER_PAGE);
+  }, [subscribers, subscriberPage]);
+
+  const REPORT_ROWS_PER_PAGE = 10;
+  const paginatedReportRows = useMemo(() => {
+    const start = (reportPage - 1) * REPORT_ROWS_PER_PAGE;
+    return reportBreakdown.rows.slice(start, start + REPORT_ROWS_PER_PAGE);
+  }, [reportBreakdown.rows, reportPage]);
+
+  const AUDIT_ORDERS_PER_PAGE = 10;
+  const paginatedDeliveredOrders = useMemo(() => {
+    const start = (deliveredAuditPage - 1) * AUDIT_ORDERS_PER_PAGE;
+    return deliveredOrdersData.orders.slice(start, start + AUDIT_ORDERS_PER_PAGE);
+  }, [deliveredOrdersData.orders, deliveredAuditPage]);
+
   // Export Delivered Orders Excel with Rich Colors & Styling
   const exportDeliveredExcel = () => {
     if (deliveredOrdersData.orders.length === 0) {
@@ -1151,10 +1357,10 @@ export default function AdminDashboardPage() {
 
         {/* Right: Quick Add + Notification Shortcuts + Admin Profile + Logout */}
         <div className="d-flex align-items-center gap-1.5 gap-sm-2 gap-md-2.5">
-          {/* Quick Action: New Garment */}
+          {/* Quick Action: New Garment (Hidden on mobile screen) */}
           <button
             onClick={() => setShowAddModal(true)}
-            className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center gap-1 px-2.5 px-sm-3 py-1.5 shadow-sm"
+            className="btn btn-sm rounded-pill fw-semibold d-none d-sm-flex align-items-center gap-1 px-2.5 px-sm-3 py-1.5 shadow-sm"
             style={{
               background: 'linear-gradient(135deg, #C5A880 0%, #B8966C 100%)',
               color: '#151311',
@@ -1166,7 +1372,7 @@ export default function AdminDashboardPage() {
             title="Create and publish new luxury garment"
           >
             <Plus size={14} />
-            <span className="d-none d-sm-inline">New Garment</span>
+            <span>New Garment</span>
           </button>
 
           {/* Quick Inquiries Bell / Mail */}
@@ -1251,7 +1457,7 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {/* ================= ADMIN SIDEBAR ================= */}
+        {/* ================= ADMIN SIDEBAR (FIXED & RESPONSIVE) ================= */}
         <aside
           className={`d-flex flex-column flex-shrink-0 transition-all ${
             mobileSidebarOpen ? 'd-flex position-fixed start-0 top-0 bottom-0' : 'd-none d-lg-flex'
@@ -1260,9 +1466,17 @@ export default function AdminDashboardPage() {
             width: '260px',
             backgroundColor: '#191715',
             borderRight: '1px solid rgba(197, 168, 128, 0.2)',
-            zIndex: 1045,
-            minHeight: 'calc(100vh - 56px)',
+            zIndex: mobileSidebarOpen ? 1055 : 1040,
+            position: mobileSidebarOpen ? 'fixed' : 'sticky',
+            top: mobileSidebarOpen ? 0 : '60px',
+            bottom: mobileSidebarOpen ? 0 : undefined,
+            left: mobileSidebarOpen ? 0 : undefined,
+            height: mobileSidebarOpen ? '100vh' : 'calc(100vh - 60px)',
+            overflowY: 'auto',
+            alignSelf: 'flex-start',
             padding: '1.25rem 0.85rem',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(197, 168, 128, 0.3) transparent',
           }}
         >
           {/* Mobile Sidebar Close Header */}
@@ -2377,25 +2591,123 @@ export default function AdminDashboardPage() {
           {/* ================= TAB 3: ORDERS ================= */}
           {activeTab === 'orders' && (
             <div className="bg-white rounded-3 border shadow-sm p-4">
-              {/* Filter Tabs */}
-              <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-                <div className="d-flex gap-2 flex-wrap">
-                  {['all', 'Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setOrderFilterStatus(status)}
-                      className={`btn btn-sm ${
-                        orderFilterStatus === status ? 'btn-dark' : 'btn-outline-secondary'
-                      }`}
-                      style={{ fontSize: '0.78rem', textTransform: 'capitalize' }}
+              {/* Search & Filter Header */}
+              <div className="d-flex flex-column gap-3 mb-4 pb-3 border-bottom">
+                {/* Auto Search Bar */}
+                <div className="row g-2 align-items-center">
+                  <div className="col-12 col-md-7 col-lg-6">
+                    <div className="position-relative">
+                      <Search
+                        size={16}
+                        className="position-absolute top-50 translate-middle-y text-muted"
+                        style={{ left: '14px' }}
+                      />
+                      <input
+                        type="text"
+                        value={orderSearch}
+                        onChange={(e) => setOrderSearch(e.target.value)}
+                        placeholder="Auto-search by Order ID (#1001), patron name, phone..."
+                        className="form-control form-control-sm ps-5 pe-5 py-2"
+                        style={{
+                          borderRadius: '8px',
+                          border: '1px solid #D5C7B5',
+                          fontSize: '0.84rem',
+                          backgroundColor: '#FCFAF7',
+                        }}
+                      />
+                      {orderSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setOrderSearch('')}
+                          className="btn btn-sm btn-link text-muted position-absolute top-50 translate-middle-y end-0 me-1 p-1 text-decoration-none"
+                          title="Clear search"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="col-12 col-md-5 col-lg-6 d-flex flex-wrap align-items-center justify-content-between justify-content-md-end gap-2 my-1 my-md-0">
+                    <span 
+                      className="d-inline-flex align-items-center gap-1.5 px-2.5 py-1.5 rounded-pill small" 
+                      style={{ backgroundColor: '#E8F5E9', color: '#1B5E20', fontSize: '0.74rem', border: '1px solid #C8E6C9' }}
                     >
-                      {status === 'all' ? `All Orders (${orders.length})` : status}
-                    </button>
-                  ))}
+                      <MessageCircle size={13} color="#2E7D32" />
+                      <span className="fw-medium">Direct WhatsApp Connected</span>
+                    </span>
+
+                    <span className="badge bg-light text-dark border px-2.5 py-1.5 rounded-pill" style={{ fontSize: '0.74rem' }}>
+                      Showing {filteredOrders.length} of {orders.length} orders
+                    </span>
+                  </div>
                 </div>
 
-                <div className="text-muted small">
-                  Showing {filteredOrders.length} order(s)
+                {/* Responsive Status Filter Bar & Active Search Pill */}
+                <div className="d-flex flex-column gap-2 mb-2">
+                  <div 
+                    className="d-flex gap-2 overflow-x-auto flex-nowrap pb-2 pt-1 align-items-center w-100"
+                    style={{
+                      scrollbarWidth: 'none',
+                      msOverflowStyle: 'none',
+                      WebkitOverflowScrolling: 'touch',
+                    }}
+                  >
+                    {['all', 'Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map((status) => {
+                      const isActive = orderFilterStatus === status;
+                      const count = status === 'all' 
+                        ? orders.length 
+                        : orders.filter((o) => (o.orderStatus || 'Confirmed').toLowerCase() === status.toLowerCase()).length;
+                      return (
+                        <button
+                          key={status}
+                          onClick={() => setOrderFilterStatus(status)}
+                          className="btn btn-sm rounded-pill text-nowrap flex-shrink-0 d-inline-flex align-items-center gap-1.5"
+                          style={{
+                            fontSize: '0.76rem',
+                            textTransform: 'capitalize',
+                            padding: '0.35rem 0.85rem',
+                            border: isActive ? '1px solid #1C1917' : '1px solid #D5C7B5',
+                            backgroundColor: isActive ? '#1C1917' : '#FFFFFF',
+                            color: isActive ? '#FAF8F5' : '#44403C',
+                            fontWeight: isActive ? 600 : 500,
+                            boxShadow: isActive ? '0 2px 6px rgba(0,0,0,0.1)' : 'none',
+                            transition: 'all 0.18s ease',
+                          }}
+                        >
+                          <span>{status === 'all' ? 'All' : status}</span>
+                          <span 
+                            className="badge rounded-pill"
+                            style={{
+                              fontSize: '0.64rem',
+                              padding: '2px 6px',
+                              backgroundColor: isActive ? '#C5A880' : 'rgba(0,0,0,0.06)',
+                              color: isActive ? '#151311' : '#78716C',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {orderSearch && (
+                    <div className="d-flex align-items-center gap-1.5 pt-1">
+                      <span className="badge bg-dark text-white d-flex align-items-center gap-1 px-2.5 py-1.5 rounded-pill" style={{ fontSize: '0.72rem' }}>
+                        <span>Order search: &quot;{orderSearch}&quot;</span>
+                        <X size={12} role="button" onClick={() => setOrderSearch('')} style={{ cursor: 'pointer' }} />
+                      </span>
+                      <button
+                        onClick={() => setOrderSearch('')}
+                        className="btn btn-sm btn-link text-decoration-none p-0 text-muted small"
+                        style={{ fontSize: '0.72rem' }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2415,12 +2727,29 @@ export default function AdminDashboardPage() {
                   <tbody style={{ fontSize: '0.85rem' }}>
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center py-4 text-muted">
-                          No orders matching this filter.
+                        <td colSpan={6} className="text-center py-5 text-muted">
+                          <div className="d-flex flex-column align-items-center gap-2">
+                            <Search size={28} className="text-secondary opacity-50" />
+                            <div className="fw-semibold text-dark">No orders found</div>
+                            <div className="small text-muted" style={{ maxWidth: '360px' }}>
+                              {orderSearch
+                                ? `No orders matched your search query "${orderSearch}". Try searching with Order ID number (e.g. 1001), patron name, or phone.`
+                                : `No orders found with status "${orderFilterStatus}".`}
+                            </div>
+                            {orderSearch && (
+                              <button
+                                onClick={() => setOrderSearch('')}
+                                className="btn btn-sm btn-outline-dark rounded-pill px-3 mt-1"
+                                style={{ fontSize: '0.78rem' }}
+                              >
+                                Clear Order Search
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ) : (
-                      filteredOrders.map((ord) => (
+                      paginatedOrders.map((ord) => (
                         <tr key={ord.orderId}>
                           <td className="ps-3 text-nowrap">
                             <span className="fw-bold text-dark d-block">#{ord.orderId}</span>
@@ -2511,9 +2840,26 @@ export default function AdminDashboardPage() {
               {/* Orders Mobile Card View */}
               <div className="d-md-none d-flex flex-column gap-3">
                 {filteredOrders.length === 0 ? (
-                  <div className="text-center py-4 text-muted">No orders matching this filter.</div>
+                  <div className="text-center py-4 text-muted bg-light rounded-3 border p-3">
+                    <Search size={22} className="text-secondary opacity-50 mb-2" />
+                    <div className="fw-semibold text-dark small">No orders found</div>
+                    <div className="small text-muted mt-1" style={{ fontSize: '0.78rem' }}>
+                      {orderSearch
+                        ? `No orders matching "${orderSearch}".`
+                        : `No orders in "${orderFilterStatus}".`}
+                    </div>
+                    {orderSearch && (
+                      <button
+                        onClick={() => setOrderSearch('')}
+                        className="btn btn-sm btn-outline-dark rounded-pill px-3 mt-2"
+                        style={{ fontSize: '0.75rem' }}
+                      >
+                        Clear Order Search
+                      </button>
+                    )}
+                  </div>
                 ) : (
-                  filteredOrders.map((ord) => (
+                  paginatedOrders.map((ord) => (
                     <div key={ord.orderId} className="bg-light p-3 rounded-3 border">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <div>
@@ -2603,6 +2949,15 @@ export default function AdminDashboardPage() {
                   ))
                 )}
               </div>
+
+              {/* Orders Pagination (10 data per page, 5 page window navigation) */}
+              <PaginationBar
+                currentPage={orderPage}
+                totalItems={filteredOrders.length}
+                pageSize={10}
+                onPageChange={setOrderPage}
+                itemLabel="orders"
+              />
             </div>
           )}
 
@@ -2724,7 +3079,7 @@ export default function AdminDashboardPage() {
                         </td>
                       </tr>
                     ) : (
-                      filteredReviews.map((rev) => (
+                      paginatedReviews.map((rev) => (
                         <tr key={rev._id || rev.id}>
                           <td className="ps-3">
                             <div className="d-flex align-items-center gap-2">
@@ -2850,7 +3205,7 @@ export default function AdminDashboardPage() {
                 {filteredReviews.length === 0 ? (
                   <div className="text-center py-4 text-muted">No reviews found matching this product filter.</div>
                 ) : (
-                  filteredReviews.map((rev) => (
+                  paginatedReviews.map((rev) => (
                     <div key={rev._id || rev.id} className="bg-light p-3 rounded-3 border">
                       <div className="d-flex gap-2.5 align-items-start mb-2">
                         {rev.productImage && (
@@ -2956,6 +3311,15 @@ export default function AdminDashboardPage() {
                   ))
                 )}
               </div>
+
+              {/* Reviews Pagination (10 data per page, 5 page window navigation) */}
+              <PaginationBar
+                currentPage={reviewPage}
+                totalItems={filteredReviews.length}
+                pageSize={10}
+                onPageChange={setReviewPage}
+                itemLabel="reviews"
+              />
             </div>
           )}
 
@@ -2963,24 +3327,60 @@ export default function AdminDashboardPage() {
           {activeTab === 'inquiries' && (
             <div className="bg-white rounded-3 border shadow-sm p-4">
               {/* Search Bar */}
-              <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-                <div className="position-relative" style={{ maxWidth: '320px', width: '100%' }}>
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4 pb-3 border-bottom">
+                <div className="position-relative" style={{ maxWidth: '420px', width: '100%' }}>
                   <Search
                     size={16}
                     className="position-absolute top-50 translate-middle-y text-muted"
-                    style={{ left: '12px' }}
+                    style={{ left: '14px' }}
                   />
                   <input
                     type="text"
                     value={inquirySearch}
                     onChange={(e) => setInquirySearch(e.target.value)}
-                    placeholder="Search by name, email or message..."
-                    className="form-control form-control-sm ps-5"
+                    placeholder="Auto-search by Order ID, patron name, phone, or message..."
+                    className="form-control form-control-sm ps-5 pe-5 py-2"
+                    style={{
+                      borderRadius: '8px',
+                      border: '1px solid #D5C7B5',
+                      fontSize: '0.84rem',
+                      backgroundColor: '#FCFAF7',
+                    }}
                   />
+                  {inquirySearch && (
+                    <button
+                      type="button"
+                      onClick={() => setInquirySearch('')}
+                      className="btn btn-sm btn-link text-muted position-absolute top-50 translate-middle-y end-0 me-1 p-1 text-decoration-none"
+                      title="Clear search"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
 
-                <div className="text-muted small">
-                  Total {inquiries.length} customer messages received
+                <div className="d-flex align-items-center gap-2 flex-wrap">
+                  <span 
+                    className="d-inline-flex align-items-center gap-1.5 px-2.5 py-1.5 rounded-pill small" 
+                    style={{ backgroundColor: '#E8F5E9', color: '#1B5E20', fontSize: '0.74rem', border: '1px solid #C8E6C9' }}
+                  >
+                    <MessageCircle size={13} color="#2E7D32" />
+                    <span>WhatsApp Direct Reply</span>
+                  </span>
+
+                  <span className="badge bg-light text-dark border px-2.5 py-1.5 rounded-pill" style={{ fontSize: '0.74rem' }}>
+                    Showing {filteredInquiries.length} of {inquiries.length} inquiries
+                  </span>
+
+                  {inquirySearch && (
+                    <button
+                      onClick={() => setInquirySearch('')}
+                      className="btn btn-sm btn-link text-decoration-none p-0 text-muted small"
+                      style={{ fontSize: '0.74rem' }}
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -3186,7 +3586,7 @@ export default function AdminDashboardPage() {
                         </td>
                       </tr>
                     ) : (
-                      subscribers.map((sub, idx) => (
+                      paginatedSubscribers.map((sub, idx) => (
                         <tr key={idx}>
                           <td className="ps-3 fw-semibold text-dark text-nowrap">
                             <div className="d-flex align-items-center gap-2">
@@ -3223,7 +3623,7 @@ export default function AdminDashboardPage() {
                 {subscribers.length === 0 ? (
                   <div className="text-center py-4 text-muted">No newsletter subscribers yet.</div>
                 ) : (
-                  subscribers.map((sub, idx) => (
+                  paginatedSubscribers.map((sub, idx) => (
                     <div key={idx} className="bg-light p-3 rounded-3 border d-flex justify-content-between align-items-center">
                       <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
@@ -3250,6 +3650,15 @@ export default function AdminDashboardPage() {
                   ))
                 )}
               </div>
+
+              {/* Subscribers Pagination (10 data per page, 5 page window navigation) */}
+              <PaginationBar
+                currentPage={subscriberPage}
+                totalItems={subscribers.length}
+                pageSize={10}
+                onPageChange={setSubscriberPage}
+                itemLabel="subscribers"
+              />
             </div>
           )}
 
@@ -3563,7 +3972,7 @@ export default function AdminDashboardPage() {
                           </td>
                         </tr>
                       ) : (
-                        reportBreakdown.rows.map((row) => {
+                        paginatedReportRows.map((row) => {
                           const percentOfMax = Math.round((row.revenue / reportBreakdown.maxRevenue) * 100);
                           const aov = Math.round(row.revenue / (row.ordersCount || 1));
                           const fulfillmentPct = Math.round((row.deliveredCount / (row.ordersCount || 1)) * 100);
@@ -3647,7 +4056,7 @@ export default function AdminDashboardPage() {
                       No order data recorded for this time range yet.
                     </div>
                   ) : (
-                    reportBreakdown.rows.map((row) => {
+                    paginatedReportRows.map((row) => {
                       const aov = Math.round(row.revenue / (row.ordersCount || 1));
                       const percentOfMax = Math.round((row.revenue / reportBreakdown.maxRevenue) * 100);
                       const fulfillmentPct = Math.round((row.deliveredCount / (row.ordersCount || 1)) * 100);
@@ -3734,6 +4143,15 @@ export default function AdminDashboardPage() {
                     })
                   )}
                 </div>
+
+                {/* Reports Breakdown Pagination (10 data per page, 5 page window navigation) */}
+                <PaginationBar
+                  currentPage={reportPage}
+                  totalItems={reportBreakdown.rows.length}
+                  pageSize={10}
+                  onPageChange={setReportPage}
+                  itemLabel="breakdown records"
+                />
               </div>
 
               {/* Status & Catalog Distribution Cards */}
@@ -4101,7 +4519,7 @@ export default function AdminDashboardPage() {
                       </td>
                     </tr>
                   ) : (
-                    deliveredOrdersData.orders.map((o) => {
+                    paginatedDeliveredOrders.map((o) => {
                       const orderDate = new Date(o.createdAt || Date.now()).toLocaleDateString('en-IN', {
                         day: 'numeric',
                         month: 'short',
@@ -4182,7 +4600,7 @@ export default function AdminDashboardPage() {
                   No delivered orders found in this date range.
                 </div>
               ) : (
-                deliveredOrdersData.orders.map((o) => {
+                paginatedDeliveredOrders.map((o) => {
                   const orderDate = new Date(o.createdAt || Date.now()).toLocaleDateString('en-IN', {
                     day: 'numeric',
                     month: 'short',
@@ -4224,6 +4642,15 @@ export default function AdminDashboardPage() {
                 })
               )}
             </div>
+
+            {/* Delivered Orders Modal Pagination (10 data per page, 5 page window navigation) */}
+            <PaginationBar
+              currentPage={deliveredAuditPage}
+              totalItems={deliveredOrdersData.orders.length}
+              pageSize={10}
+              onPageChange={setDeliveredAuditPage}
+              itemLabel="delivered orders"
+            />
 
             {/* Modal Footer */}
             <div className="d-flex justify-content-end gap-2 pt-2 border-top">

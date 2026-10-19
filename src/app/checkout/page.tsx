@@ -15,16 +15,18 @@ import {
   CreditCard, 
   Sparkles,
   MessageSquare,
-  Clock
+  Clock,
+  ExternalLink
 } from 'lucide-react';
 
 function generateWhatsAppOrderMessage(order: any) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://iralifestyle.com';
   const itemsText = order.items
     ?.map(
       (item: any, i: number) =>
-        `${i + 1}. *${item.title}*\n   Size: ${item.size} | Qty: ${item.quantity} | ₹${(item.price * item.quantity).toLocaleString('en-IN')}`
+        `${i + 1}. *${item.title}*\n   • Size: ${item.size} | Qty: ${item.quantity} | ₹${(item.price * item.quantity).toLocaleString('en-IN')}\n   • 🔗 *Product Link:* ${origin}/product/${item.productId}`
     )
-    .join('\n');
+    .join('\n\n');
 
   return `*✨ IRA LIFESTYLE - ORDER BILL & DETAILS ✨*
 ----------------------------------------
@@ -41,16 +43,16 @@ function generateWhatsAppOrderMessage(order: any) {
 ${order.shippingAddress.address}, ${order.shippingAddress.city}, ${order.shippingAddress.state} - ${order.shippingAddress.pincode}
 Country: ${order.shippingAddress.country || 'India'}
 
-*🛍️ Order Items:*
+*🛍️ Ordered Garments:*
 ${itemsText}
 
 ----------------------------------------
 *Subtotal:* ₹${order.subtotal?.toLocaleString('en-IN')}
 ${order.discount ? `*Discount:* -₹${order.discount.toLocaleString('en-IN')}\n` : ''}*Delivery:* FREE EXPRESS
 *Grand Total:* ₹${order.total?.toLocaleString('en-IN')}
-*Payment Mode:* ${order.paymentMethod}
+*Order Bill Mode:* Direct Studio WhatsApp Order
 ----------------------------------------
-_Please verify my order details & confirm delivery schedule. Thank you!_`;
+_Tap any product link above to inspect the garment. Please verify this bill & confirm delivery schedule. Thank you!_`;
 }
 
 export default function CheckoutPage() {
@@ -67,7 +69,7 @@ export default function CheckoutPage() {
     state: user?.state || 'Maharashtra',
     pincode: user?.pincode || '',
     country: 'India',
-    paymentMethod: 'Instant UPI / QR Code (Google Pay, PhonePe, Paytm)',
+    paymentMethod: 'Direct Studio Bill (WhatsApp Verified)',
   });
 
   React.useEffect(() => {
@@ -234,11 +236,25 @@ export default function CheckoutPage() {
               <strong className="d-block mb-2 text-dark small">Ordered Garments:</strong>
               <div className="d-flex flex-column gap-2">
                 {placedOrder.items?.map((it: any, idx: number) => (
-                  <div key={idx} className="d-flex justify-content-between text-muted small">
-                    <span>
-                      {it.title} <span className="text-dark fw-medium">({it.size} &times; {it.quantity})</span>
-                    </span>
-                    <span className="fw-medium text-dark">₹{(it.price * it.quantity).toLocaleString('en-IN')}</span>
+                  <div key={idx} className="p-2.5 rounded bg-white border d-flex flex-column gap-1">
+                    <div className="d-flex justify-content-between text-muted small">
+                      <span className="text-dark fw-semibold">
+                        {it.title} <span className="text-muted fw-normal">({it.size} &times; {it.quantity})</span>
+                      </span>
+                      <span className="fw-bold text-dark">₹{(it.price * it.quantity).toLocaleString('en-IN')}</span>
+                    </div>
+                    {it.productId && (
+                      <div>
+                        <Link 
+                          href={`/product/${it.productId}`}
+                          target="_blank"
+                          className="text-decoration-none small d-inline-flex align-items-center gap-1"
+                          style={{ color: 'var(--gold-primary)', fontSize: '0.74rem', fontWeight: 500 }}
+                        >
+                          <span>Check Product Link</span> <ExternalLink size={11} />
+                        </Link>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -389,56 +405,22 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Payment Methods */}
-              <div className="bg-white p-4 p-md-5 rounded border shadow-sm">
-                <div className="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
-                  <CreditCard size={20} color="var(--gold-primary)" />
-                  <h4 className="font-serif fs-5 mb-0 text-dark">2. Select Payment Mode</h4>
+              {/* Direct Studio Bill & WhatsApp Order Dispatch */}
+              <div 
+                className="p-4 p-md-4 rounded border shadow-sm"
+                style={{ 
+                  backgroundColor: '#FFFFFF', 
+                  borderColor: 'rgba(197, 168, 128, 0.4)',
+                  borderLeft: '4px solid var(--gold-primary)' 
+                }}
+              >
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <MessageSquare size={19} color="#25D366" />
+                  <h4 className="font-serif fs-5 mb-0 text-dark">Direct Studio Bill & WhatsApp Dispatch</h4>
                 </div>
-
-                <div className="d-flex flex-column gap-3">
-                  <label className="d-flex align-items-center gap-3 p-3 border rounded cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value="Instant UPI / QR Code (Google Pay, PhonePe, Paytm)"
-                      checked={form.paymentMethod === 'Instant UPI / QR Code (Google Pay, PhonePe, Paytm)'}
-                      onChange={() => setForm({ ...form, paymentMethod: 'Instant UPI / QR Code (Google Pay, PhonePe, Paytm)' })}
-                    />
-                    <div>
-                      <strong className="d-block" style={{ fontSize: '0.88rem' }}>Instant UPI / QR Code (Google Pay, PhonePe, Paytm)</strong>
-                      <span className="text-muted small">Fast & secure frictionless checkout with zero extra fees</span>
-                    </div>
-                  </label>
-
-                  <label className="d-flex align-items-center gap-3 p-3 border rounded cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value="Credit / Debit Cards & Net Banking"
-                      checked={form.paymentMethod === 'Credit / Debit Cards & Net Banking'}
-                      onChange={() => setForm({ ...form, paymentMethod: 'Credit / Debit Cards & Net Banking' })}
-                    />
-                    <div>
-                      <strong className="d-block" style={{ fontSize: '0.88rem' }}>Credit / Debit Cards & Net Banking</strong>
-                      <span className="text-muted small">Visa, Mastercard, RuPay, Amex</span>
-                    </div>
-                  </label>
-
-                  <label className="d-flex align-items-center gap-3 p-3 border rounded cursor-pointer">
-                    <input
-                      type="radio"
-                      name="payment"
-                      value="Cash on Delivery (COD)"
-                      checked={form.paymentMethod === 'Cash on Delivery (COD)'}
-                      onChange={() => setForm({ ...form, paymentMethod: 'Cash on Delivery (COD)' })}
-                    />
-                    <div>
-                      <strong className="d-block" style={{ fontSize: '0.88rem' }}>Cash on Delivery (COD)</strong>
-                      <span className="text-muted small">Pay cash when your luxury parcel arrives at your doorstep</span>
-                    </div>
-                  </label>
-                </div>
+                <p className="text-muted small mb-0" style={{ lineHeight: '1.65' }}>
+                  No extra payment gateways required. When you click <strong>&quot;BILL NOW&quot;</strong>, your verified order bill is generated with clickable product links and sent directly to our studio WhatsApp line (+91 99954 66002) for instant booking and dispatch confirmation.
+                </p>
               </div>
             </div>
 
@@ -488,17 +470,19 @@ export default function CheckoutPage() {
                   <span style={{ color: 'var(--gold-primary)' }}>₹{grandTotal.toLocaleString('en-IN')}</span>
                 </div>
 
-                {/* Continue Order & Send Bill Button */}
+                {/* Bill Now & Send Bill Button */}
                 <button
                   type="submit"
                   disabled={placing}
-                  className="btn-ira-gold w-100 justify-content-center py-3 text-center mb-2"
+                  className="btn-ira-gold w-100 justify-content-center py-3 text-center mb-2 d-flex align-items-center gap-2"
+                  style={{ fontSize: '0.94rem', letterSpacing: '0.08em', fontWeight: 600 }}
                 >
-                  {placing ? 'SAVING ORDER & PREPARING BILL...' : `CONTINUE ORDER & BILL • ₹${grandTotal.toLocaleString('en-IN')}`}
+                  <MessageSquare size={18} />
+                  <span>{placing ? 'SAVING ORDER & PREPARING BILL...' : `BILL NOW • ₹${grandTotal.toLocaleString('en-IN')}`}</span>
                 </button>
 
-                <p className="text-muted small text-center mb-3" style={{ fontSize: '0.72rem', lineHeight: '1.5' }}>
-                  Clicking will save your order with <strong>Pending</strong> status and open WhatsApp (+91 99954 66002) with your complete bill for verification.
+                <p className="text-muted small text-center mb-3" style={{ fontSize: '0.74rem', lineHeight: '1.5' }}>
+                  Clicking <strong>BILL NOW</strong> will register your order, create your itemized bill with clickable product links, and share directly to our studio WhatsApp line (+91 99954 66002).
                 </p>
 
                 <div className="d-flex align-items-center justify-content-center gap-1 text-muted small text-center">

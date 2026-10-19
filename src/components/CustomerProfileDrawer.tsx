@@ -119,7 +119,7 @@ export default function CustomerProfileDrawer() {
       >
         {/* ================= 1. ROYAL ATELIER HEADER ================= */}
         <div 
-          className="p-3 p-sm-4 position-relative overflow-hidden text-white"
+          className="p-3 p-sm-4 position-relative overflow-hidden text-white flex-shrink-0"
           style={{
             background: 'linear-gradient(135deg, #1C1917 0%, #2B241F 60%, #1A1715 100%)',
             borderBottom: '1px solid rgba(197, 168, 128, 0.35)',
@@ -133,46 +133,49 @@ export default function CustomerProfileDrawer() {
             <Sparkles size={65} color="#C5A880" />
           </div>
 
-          <div className="d-flex align-items-center justify-content-end position-relative z-1 mb-2">
-            <button 
-              onClick={closeProfileDrawer}
-              className="btn btn-sm d-flex align-items-center justify-content-center rounded-circle"
-              style={{
-                width: '32px',
-                height: '32px',
-                backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                color: '#C5A880',
-                border: '1px solid rgba(197, 168, 128, 0.35)',
-                transition: 'all 0.2s ease',
-              }}
-              aria-label="Close Profile Drawer"
-            >
-              <X size={16} />
-            </button>
-          </div>
+          {/* Close Button positioned top-right with high z-index */}
+          <button 
+            onClick={closeProfileDrawer}
+            className="btn btn-sm d-flex align-items-center justify-content-center rounded-circle position-absolute"
+            style={{
+              top: '14px',
+              right: '14px',
+              width: '32px',
+              height: '32px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              color: '#C5A880',
+              border: '1px solid rgba(197, 168, 128, 0.35)',
+              transition: 'all 0.2s ease',
+              zIndex: 10,
+            }}
+            aria-label="Close Profile Drawer"
+          >
+            <X size={16} />
+          </button>
 
-          <div className="d-flex align-items-center gap-3 position-relative z-1">
+          {/* Profile Details with safe right padding to avoid close button overlap */}
+          <div className="d-flex align-items-center gap-3 pe-4 position-relative z-1">
             {user.avatar ? (
               <div 
                 className="position-relative rounded-circle overflow-hidden flex-shrink-0" 
                 style={{
-                  width: '50px', 
-                  height: '50px', 
+                  width: '54px', 
+                  height: '54px', 
                   border: '2px solid #C5A880',
                   boxShadow: '0 0 16px rgba(197, 168, 128, 0.4)',
                 }}
               >
-                <Image src={user.avatar} alt={user.name} fill sizes="50px" style={{ objectFit: 'cover' }} />
+                <Image src={user.avatar} alt={user.name} fill sizes="54px" style={{ objectFit: 'cover' }} />
               </div>
             ) : (
               <div 
                 className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold flex-shrink-0"
                 style={{
-                  width: '50px',
-                  height: '50px',
+                  width: '54px',
+                  height: '54px',
                   backgroundColor: '#C5A880',
                   color: '#151311',
-                  fontSize: '1.2rem',
+                  fontSize: '1.25rem',
                   boxShadow: '0 0 16px rgba(197, 168, 128, 0.4)',
                 }}
               >
@@ -180,15 +183,15 @@ export default function CustomerProfileDrawer() {
               </div>
             )}
 
-            <div className="overflow-hidden">
-              <h5 className="mb-0 fw-bold font-serif text-white text-truncate" style={{ fontSize: '1.12rem', letterSpacing: '0.02em' }}>
+            <div className="overflow-hidden flex-grow-1">
+              <h5 className="mb-1 fw-bold font-serif text-white text-truncate" style={{ fontSize: '1.15rem', letterSpacing: '0.02em', lineHeight: 1.25 }}>
                 {user.name}
               </h5>
               
               <div className="d-flex align-items-center gap-2 mt-1 flex-wrap">
                 {user.provider === 'google' ? (
                   <span 
-                    className="badge d-inline-flex align-items-center gap-1 px-2 py-0" 
+                    className="badge d-inline-flex align-items-center gap-1 px-2 py-0 flex-shrink-0" 
                     style={{ 
                       fontSize: '0.62rem', 
                       backgroundColor: 'rgba(255, 255, 255, 0.1)', 
@@ -207,7 +210,7 @@ export default function CustomerProfileDrawer() {
                   </span>
                 ) : (
                   <span 
-                    className="badge d-inline-flex align-items-center gap-1 px-2 py-0" 
+                    className="badge d-inline-flex align-items-center gap-1 px-2 py-0 flex-shrink-0" 
                     style={{ 
                       fontSize: '0.62rem', 
                       backgroundColor: 'rgba(255, 255, 255, 0.1)', 
@@ -229,7 +232,7 @@ export default function CustomerProfileDrawer() {
 
         {/* ================= 2. RESPONSIVE TWO-TAB CONTROLLER ================= */}
         <div 
-          className="d-flex bg-white border-bottom"
+          className="d-flex bg-white border-bottom flex-shrink-0"
           style={{ borderColor: 'rgba(197, 168, 128, 0.2)' }}
         >
           <button
@@ -238,8 +241,8 @@ export default function CustomerProfileDrawer() {
               activeTab === 'orders' ? 'text-dark' : 'text-muted'
             }`}
             style={{
-              fontSize: '0.78rem',
-              letterSpacing: '0.1em',
+              fontSize: '0.76rem',
+              letterSpacing: '0.08em',
               transition: 'all 0.2s ease',
             }}
           >
@@ -261,8 +264,8 @@ export default function CustomerProfileDrawer() {
               activeTab === 'address' ? 'text-dark' : 'text-muted'
             }`}
             style={{
-              fontSize: '0.78rem',
-              letterSpacing: '0.1em',
+              fontSize: '0.76rem',
+              letterSpacing: '0.08em',
               transition: 'all 0.2s ease',
             }}
           >
@@ -603,7 +606,7 @@ export default function CustomerProfileDrawer() {
 
         {/* ================= 4. DRAWER FOOTER ================= */}
         <div 
-          className="p-3 px-sm-4 border-top bg-white d-flex align-items-center justify-content-between"
+          className="p-3 px-sm-4 border-top bg-white d-flex align-items-center justify-content-between flex-shrink-0"
           style={{ 
             borderColor: 'rgba(197, 168, 128, 0.25)',
             boxShadow: '0 -4px 15px rgba(0,0,0,0.03)',

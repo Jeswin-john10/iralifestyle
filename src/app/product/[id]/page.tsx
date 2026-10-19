@@ -381,6 +381,20 @@ function ProductDetailContent() {
               >
                 BUY IT NOW
               </button>
+
+              {/* Share Product Link Directly to WhatsApp */}
+              <a
+                href={`https://wa.me/919995466002?text=${encodeURIComponent(
+                  `*✨ IRA LIFESTYLE - GARMENT INQUIRY & BILLING ✨*\n\nHello IRA Lifestyle Team, please check this piece:\n• *Garment:* ${product.title}\n• *Price:* ₹${product.price.toLocaleString('en-IN')}\n• *Selected Size:* ${selectedSize}\n• *Quantity:* ${quantity}\n\n🔗 *Check Product Link:* ${typeof window !== 'undefined' ? `${window.location.origin}/product/${product.id}` : `https://iralifestyle.com/product/${product.id}`}\n\nPlease verify availability and bill details. Thank you!`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-outline-success w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-semibold"
+                style={{ height: '44px', fontSize: '0.82rem', letterSpacing: '0.06em', borderRadius: '4px' }}
+              >
+                <MessageSquare size={16} />
+                <span>SHARE TO WHATSAPP (+91 99954 66002)</span>
+              </a>
             </div>
 
             {/* Value Highlights */}
