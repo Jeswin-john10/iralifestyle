@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Lock,
   User,
@@ -281,16 +281,28 @@ function RoyalCrownIcon({ size = 26, color = '#C5A880' }: { size?: number; color
   );
 }
 
-export default function AdminLoginPage() {
+function AdminLoginForm() {
   const router = useRouter();
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('ira@lifestyle2026');
+  const searchParams = useSearchParams();
+  const reason = searchParams?.get('reason');
+
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [securityNotice, setSecurityNotice] = useState<string | null>(null);
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [forgotModal, setForgotModal] = useState(false);
+
+  useEffect(() => {
+    if (reason === 'inactivity') {
+      setSecurityNotice('Security Alert: You were automatically logged out due to inactivity to safeguard order and client records.');
+    } else if (reason === 'unauthorized') {
+      setSecurityNotice('Authentication Required: Please enter your administrator username and password.');
+    }
+  }, [reason]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -455,6 +467,22 @@ export default function AdminLoginPage() {
               />
             </div>
           </div>
+
+          {/* Security Notice from Inactivity or Unauthorized Route Access */}
+          {securityNotice && (
+            <div
+              className="alert py-2 px-3 small mb-3 text-start rounded-3 d-flex align-items-center gap-2"
+              style={{
+                fontSize: '0.82rem',
+                backgroundColor: 'rgba(197, 168, 128, 0.15)',
+                color: '#78552B',
+                border: '1px solid rgba(197, 168, 128, 0.45)',
+              }}
+            >
+              <ShieldCheck size={16} className="flex-shrink-0" color="#9E753F" />
+              <span>{securityNotice}</span>
+            </div>
+          )}
 
           {/* Error Notice */}
           {error && (
@@ -731,5 +759,19 @@ export default function AdminLoginPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-vh-100 d-flex align-items-center justify-content-center bg-dark text-white">
+          <div className="spinner-border text-warning" role="status" />
+        </div>
+      }
+    >
+      <AdminLoginForm />
+    </Suspense>
   );
 }

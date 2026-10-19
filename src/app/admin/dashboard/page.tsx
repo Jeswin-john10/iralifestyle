@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -46,7 +46,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 
 interface InquiryItem {
@@ -219,6 +221,12 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
 
+  // Security & Administrative Authentication
+  const [isVerifyingAuth, setIsVerifyingAuth] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [inactivitySecondsLeft, setInactivitySecondsLeft] = useState<number | null>(null);
+  const lastActivityRef = useRef<number>(Date.now());
+
   // Data states
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -335,8 +343,37 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // 1. Verify Administrative Session on Mount
   useEffect(() => {
-    loadData();
+    let isMounted = true;
+    const verifySession = async () => {
+      try {
+        const res = await fetch('/api/admin/login');
+        if (!res.ok) {
+          router.replace('/admin/ira/login?reason=unauthorized');
+          return;
+        }
+        const data = await res.json();
+        if (data.authenticated && isMounted) {
+          setIsAuthenticated(true);
+          setIsVerifyingAuth(false);
+          loadData();
+        } else {
+          router.replace('/admin/ira/login?reason=unauthorized');
+        }
+      } catch {
+        router.replace('/admin/ira/login?reason=unauthorized');
+      }
+    };
+
+    verifySession();
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  // Clock Update Effect
+  useEffect(() => {
     const updateTime = () => {
       setHeaderTime(
         new Date().toLocaleTimeString('en-IN', {
@@ -351,9 +388,50 @@ export default function AdminDashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
+  // 2. 15-Minute Inactivity Auto-Logout Security Shield
+  const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 mins
+  const WARNING_LIMIT_MS = 14 * 60 * 1000;    // 14 mins (1 min countdown warning)
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const resetTimer = () => {
+      lastActivityRef.current = Date.now();
+      setInactivitySecondsLeft(null);
+    };
+
+    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    activityEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+
+    const checkInterval = setInterval(async () => {
+      const elapsed = Date.now() - lastActivityRef.current;
+
+      if (elapsed >= INACTIVITY_LIMIT_MS) {
+        clearInterval(checkInterval);
+        activityEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
+        try {
+          await fetch('/api/admin/login', { method: 'DELETE' });
+        } catch {}
+        router.replace('/admin/ira/login?reason=inactivity');
+      } else if (elapsed >= WARNING_LIMIT_MS) {
+        const remaining = Math.max(0, Math.ceil((INACTIVITY_LIMIT_MS - elapsed) / 1000));
+        setInactivitySecondsLeft(remaining);
+      } else {
+        setInactivitySecondsLeft(null);
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(checkInterval);
+      activityEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
+    };
+  }, [isAuthenticated, router]);
+
   const handleLogout = async () => {
-    await fetch('/api/admin/login', { method: 'DELETE' });
-    router.push('/admin/ira/login');
+    try {
+      await fetch('/api/admin/login', { method: 'DELETE' });
+    } catch {}
+    router.replace('/admin/ira/login');
   };
 
   // Cloudflare R2 Upload
@@ -1195,8 +1273,66 @@ export default function AdminDashboardPage() {
     setTimeout(() => setCopiedReport(false), 2500);
   };
 
+  // If verifying authentication on entry, display luxury security shield
+  if (isVerifyingAuth) {
+    return (
+      <div 
+        className="min-vh-100 d-flex flex-column align-items-center justify-content-center text-center p-4"
+        style={{
+          backgroundColor: '#14100D',
+          color: '#FAF7F2',
+          backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(68, 50, 34, 0.45) 0%, rgba(16, 12, 10, 0.98) 100%)',
+        }}
+      >
+        <div 
+          className="rounded-circle d-flex align-items-center justify-content-center mb-3 shadow-lg"
+          style={{ width: '64px', height: '64px', backgroundColor: 'rgba(197, 168, 128, 0.15)', border: '1px solid #C5A880' }}
+        >
+          <ShieldCheck size={32} color="#C5A880" />
+        </div>
+        <h4 className="font-serif fw-bold mb-1" style={{ letterSpacing: '0.08em', color: '#FAF7F2' }}>
+          IRA ATELIER SECURITY
+        </h4>
+        <p className="small mb-3" style={{ maxWidth: '340px', color: '#C5A880' }}>
+          Verifying administrative credentials and session authenticity...
+        </p>
+        <div className="spinner-border spinner-border-sm" style={{ color: '#C5A880' }} role="status" />
+      </div>
+    );
+  }
+
   return (
     <div style={{ backgroundColor: '#F8F6F0', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Inactivity Security Warning Toast */}
+      {inactivitySecondsLeft !== null && (
+        <div 
+          className="position-fixed top-0 start-50 translate-middle-x mt-3 shadow-lg rounded-pill px-4 py-2 d-flex align-items-center gap-3"
+          style={{
+            zIndex: 9999,
+            backgroundColor: '#2A1B0E',
+            border: '1px solid #EAB308',
+            color: '#FEF08A',
+            fontSize: '0.84rem',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+          }}
+        >
+          <ShieldAlert size={18} color="#FACC15" className="flex-shrink-0" />
+          <span>
+            <strong>Security Notice:</strong> Auto-logout in <strong>{inactivitySecondsLeft}s</strong> due to inactivity
+          </span>
+          <button
+            onClick={() => {
+              lastActivityRef.current = Date.now();
+              setInactivitySecondsLeft(null);
+            }}
+            className="btn btn-sm btn-warning fw-bold rounded-pill px-3 py-1 text-dark"
+            style={{ fontSize: '0.74rem' }}
+          >
+            Stay Signed In
+          </button>
+        </div>
+      )}
+
       {/* Toast Notification */}
       {actionNotice && (
         <div 
