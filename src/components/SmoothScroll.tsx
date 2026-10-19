@@ -1,29 +1,37 @@
 'use client';
 
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import Lenis from 'lenis';
 
 export default function SmoothScroll({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.2,
+      duration: 1.4,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       orientation: 'vertical',
       gestureOrientation: 'vertical',
       smoothWheel: true,
-      touchMultiplier: 2,
+      wheelMultiplier: 0.95,
+      touchMultiplier: 1.8,
+      infinite: false,
     });
+
+    let animationFrameId: number;
 
     function raf(time: number) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      animationFrameId = requestAnimationFrame(raf);
     }
 
-    const animFrame = requestAnimationFrame(raf);
+    animationFrameId = requestAnimationFrame(raf);
+
+    // Make lenis globally accessible for any programmatic scrolls
+    (window as any).lenis = lenis;
 
     return () => {
-      cancelAnimationFrame(animFrame);
+      cancelAnimationFrame(animationFrameId);
       lenis.destroy();
+      delete (window as any).lenis;
     };
   }, []);
 

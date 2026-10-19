@@ -1,139 +1,177 @@
 import React from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, Sparkles, Gem, Heart, Leaf } from 'lucide-react';
+import Image from 'next/image';
+import { 
+  ArrowRight, 
+  Sparkles, 
+  Heart, 
+  Award, 
+  MapPin, 
+  Compass, 
+  Gem, 
+  CheckCircle2, 
+  Users
+} from 'lucide-react';
+import AboutRoadmap from '@/components/AboutRoadmap';
 
 export const metadata = {
-  title: 'About Our Heritage | IRA LIFESTYLE',
-  description: 'The story behind IRA Lifestyle — celebrating traditional Indian artisanal mastery and modern grace.',
+  title: 'Our Story & Heritage | IRA Lifestyle',
+  description: 'The story of Nikhil & Anju: a couple goal born in Guruvayoor, Thrissur, blessed by parents, and dedicated to timeless luxury Indian clothing.',
 };
 
 export default function AboutPage() {
   return (
-    <div className="w-full bg-[#FAF7F2] min-h-screen py-10 md:py-16">
-      <div className="max-w-7xl mx-auto px-4 md:px-12">
-        {/* Hero Section */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
-          <span className="text-[11px] tracking-[0.3em] text-[#8F867C] uppercase font-semibold block mb-2">
-            OUR HERITAGE &bull; PHILOSOPHY
-          </span>
-          <h1
-            style={{ fontFamily: 'var(--font-serif)' }}
-            className="text-4xl sm:text-5xl lg:text-6xl font-normal text-[#231F1C] tracking-tight mb-6"
-          >
-            The Spirit of IRA Lifestyle
+    <div className="py-5" style={{ backgroundColor: '#FAF7F2' }}>
+      <div className="container">
+        {/* 1. HERO BANNER */}
+        <div className="text-center mb-5 pb-2">
+          <div className="d-inline-flex align-items-center gap-2 mb-2">
+            <span className="text-uppercase fw-semibold" style={{ fontSize: '0.74rem', letterSpacing: '0.22em', color: 'var(--gold-primary)' }}>
+              THE HOUSE OF IRA &bull; GURUVAYOOR, THRISSUR
+            </span>
+          </div>
+          <h1 className="font-serif display-4 fw-normal text-dark mt-1">
+            Built on Love, Blessed by Family
           </h1>
-          <p className="text-sm sm:text-base text-[#6F665C] font-light leading-relaxed">
-            In Sanskrit, <em className="text-[#B68D56] font-normal not-italic font-semibold">IRA</em> signifies wisdom, pure earth, and the divine muse of artistic grace. We were born out of a desire to create clothing that honors generational Indian textile artistry while offering effortless comfort for the contemporary global woman.
+          <p className="text-muted mx-auto" style={{ maxWidth: '680px', fontSize: '0.94rem', lineHeight: '1.8' }}>
+            Where Nikhil &amp; Anju&apos;s shared couple goal met the unconditional blessings of parents to create IRA Lifestyle &mdash; timeless elegance born in the cultural heart of Kerala.
           </p>
         </div>
 
-        {/* Big Dual-panel Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center mb-20">
-          <div className="lg:col-span-6 relative aspect-[4/5] rounded-xs overflow-hidden shadow-sm bg-[#EDE5D8]">
-            <Image
-              src="/images/story-model.jpg"
-              alt="IRA Lifestyle Philosophy"
-              fill
-              className="object-cover"
-            />
-          </div>
-
-          <div className="lg:col-span-6 space-y-6">
-            <span className="text-xs uppercase tracking-[0.25em] font-semibold text-[#8F867C]">
-              BORN IN HERITAGE
-            </span>
-            <h2
-              style={{ fontFamily: 'var(--font-serif)' }}
-              className="text-3xl sm:text-4xl text-[#231F1C] font-normal leading-snug"
+        {/* 2. THE COUPLE STORY & GENESIS */}
+        <div className="row align-items-center gy-5 mb-5 pb-5 border-bottom reveal-card">
+          <div className="col-12 col-md-6">
+            <div 
+              className="position-relative rounded shadow overflow-hidden"
+              style={{ aspectRatio: '4 / 3.6', backgroundColor: '#E8E2D7' }}
             >
-              Every Thread Carries A Legacy
-            </h2>
-            <p className="text-sm text-[#686057] leading-relaxed font-light">
-              From the historic looms of Chanderi and Varanasi to hand-guided zardozi embroidery workshops in Old Delhi and Lucknow, each IRA creation is touched by master artisans who have perfected their discipline over decades.
-            </p>
-            <p className="text-sm text-[#686057] leading-relaxed font-light">
-              We reject fleeting, disposable trends. Instead, our silhouettes are designed to be heirloom staples in your wardrobe — garments that you wear with pride at grand celebrations and cherish for years to come.
-            </p>
-            <div className="pt-2">
-              <Link
-                href="/shop"
-                className="gold-btn px-6 py-3 text-xs tracking-widest rounded-xs uppercase inline-flex items-center space-x-2"
+              <Image
+                src="/images/story_portrait.jpg"
+                alt="Nikhil & Anju - Founders of IRA Lifestyle"
+                fill
+                sizes="(max-width: 768px) 100vw, 50vw"
+                style={{ objectFit: 'cover', objectPosition: 'center 15%' }}
+              />
+              <div 
+                className="position-absolute bottom-0 start-0 w-100 p-3"
+                style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(17, 15, 13, 0.8) 100%)' }}
               >
-                <span>EXPLORE CREATIONS</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+                <div className="text-white d-flex align-items-center gap-2 small fw-light">
+                  <MapPin size={14} style={{ color: 'var(--gold-primary)' }} />
+                  <span>The Founders&apos; Atelier &bull; Guruvayoor, Thrissur</span>
+                </div>
+              </div>
             </div>
+          </div>
+          <div className="col-12 col-md-6 ps-lg-5">
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <Heart size={14} style={{ color: 'var(--gold-primary)' }} fill="currentColor" />
+              <span className="text-uppercase fw-semibold" style={{ fontSize: '0.72rem', letterSpacing: '0.18em', color: 'var(--gold-primary)' }}>
+                OUR COUPLE GOAL &amp; ORIGIN
+              </span>
+            </div>
+            <h2 className="font-serif fs-2 fw-normal text-dark mt-1 mb-3">
+              Two Hearts, One Timeless Dream
+            </h2>
+            <p className="text-muted mb-3" style={{ fontSize: '0.9rem', lineHeight: '1.8' }}>
+              IRA Lifestyle took root in <strong>early 2024</strong> around a modest living room table in <strong>Guruvayoor, Thrissur</strong>. Founded by <strong>Nikhil and Anju</strong>, IRA began as a passionate couple goal &mdash; months of thoughtful planning, sketching, and dreaming hand-in-hand to build a homegrown label that celebrates everyday royal elegance.
+            </p>
+            <p className="text-muted mb-3" style={{ fontSize: '0.9rem', lineHeight: '1.8' }}>
+              Walking side-by-side through every step, Nikhil and Anju found their greatest superpower in the <strong>unconditional love and blessings of their parents</strong>. When they took the leap to turn their shared thoughts into a brand, their families stood as their unwavering anchor of encouragement and faith.
+            </p>
+            <p className="text-muted mb-4" style={{ fontSize: '0.9rem', lineHeight: '1.8' }}>
+              Today, IRA Lifestyle operates as a beloved <strong>online shopping brand</strong> delivering nationwide from Guruvayoor, with exciting blueprints underway to open our first <strong>flagship physical experience branches</strong> in Thrissur and Kochi. Every creation carries the warmth of couple teamwork, parental grace, and Kerala&apos;s rich cultural heritage.
+            </p>
+            <Link href="/shop" className="btn-ira-gold">
+              EXPLORE OUR CREATIONS <ArrowRight size={15} />
+            </Link>
           </div>
         </div>
 
-        {/* 3 Pillars */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 py-14 border-t border-b border-[#EDE5D8] mb-20">
-          <div className="bg-[#F4EFE6] p-8 rounded-xs border border-[#EDE5D8]/80 text-center flex flex-col items-center">
-            <div className="w-12 h-12 rounded-full bg-[#EAE2D2] flex items-center justify-center text-[#B68D56] mb-5">
-              <Gem className="w-6 h-6 stroke-[1.5]" />
+        {/* 3. THE BRAND ROADMAP & JOURNEY (NIKHIL & ANJU COUPLE GOALS WITH SMOOTH ALTERNATING SCROLL ANIMATIONS) */}
+        <div className="pt-2">
+          <div className="text-center mb-4">
+            <div className="d-inline-flex align-items-center gap-2 mb-2">
+              <Sparkles size={16} style={{ color: 'var(--gold-primary)' }} />
+              <span className="text-uppercase fw-semibold" style={{ fontSize: '0.74rem', letterSpacing: '0.22em', color: 'var(--gold-primary)' }}>
+                THE FOUNDERS&apos; JOURNEY &amp; ROADMAP
+              </span>
+              <Sparkles size={16} style={{ color: 'var(--gold-primary)' }} />
             </div>
-            <h3
-              style={{ fontFamily: 'var(--font-serif)' }}
-              className="text-2xl text-[#231F1C] font-normal mb-3"
-            >
-              Artisanal Nobility
-            </h3>
-            <p className="text-xs text-[#6F665C] leading-relaxed font-light">
-              We exclusively use pure handloom silks, fine Belgian linens, organic cotton shantoons, and micro-chiffons treated with natural vegetable dyes whenever possible.
+            <h2 className="font-serif display-5 fw-normal text-dark mt-1">
+              Milestones of a Couple&apos;s Dream
+            </h2>
+            <p className="text-muted mx-auto" style={{ maxWidth: '640px', fontSize: '0.9rem', lineHeight: '1.75' }}>
+              Scroll to follow the unfolding chapters of Nikhil &amp; Anju &mdash; each milestone gliding in from right and left &mdash; from their humble beginnings in Guruvayoor to dressing women across the globe.
             </p>
           </div>
 
-          <div className="bg-[#F4EFE6] p-8 rounded-xs border border-[#EDE5D8]/80 text-center flex flex-col items-center">
-            <div className="w-12 h-12 rounded-full bg-[#EAE2D2] flex items-center justify-center text-[#B68D56] mb-5">
-              <Heart className="w-6 h-6 stroke-[1.5]" />
-            </div>
-            <h3
-              style={{ fontFamily: 'var(--font-serif)' }}
-              className="text-2xl text-[#231F1C] font-normal mb-3"
-            >
-              The Modern Silhouette
-            </h3>
-            <p className="text-xs text-[#6F665C] leading-relaxed font-light">
-              Indian ethnic clothing should flatter without restricting. Every cut is engineered with ergonomic armholes, discreet pockets, and adjustable waist sashes.
-            </p>
-          </div>
-
-          <div className="bg-[#F4EFE6] p-8 rounded-xs border border-[#EDE5D8]/80 text-center flex flex-col items-center">
-            <div className="w-12 h-12 rounded-full bg-[#EAE2D2] flex items-center justify-center text-[#B68D56] mb-5">
-              <Leaf className="w-6 h-6 stroke-[1.5]" />
-            </div>
-            <h3
-              style={{ fontFamily: 'var(--font-serif)' }}
-              className="text-2xl text-[#231F1C] font-normal mb-3"
-            >
-              Ethical Atelier
-            </h3>
-            <p className="text-xs text-[#6F665C] leading-relaxed font-light">
-              Our partner weavers and karigars receive transparent fair wages, safe studio environments, and healthcare support for their families.
-            </p>
-          </div>
+          {/* Interactive Roadmap Component */}
+          <AboutRoadmap />
         </div>
 
-        {/* Monogram Seal Quote */}
-        <div className="text-center max-w-2xl mx-auto py-8">
-          <div className="relative w-14 h-14 mx-auto mb-4">
-            <Image
-              src="/images/ira-logo.png"
-              alt="IRA Seal"
-              fill
-              className="object-contain"
-            />
-          </div>
-          <blockquote
-            style={{ fontFamily: 'var(--font-serif)' }}
-            className="text-2xl sm:text-3xl text-[#231F1C] italic font-normal leading-relaxed mb-3"
-          >
-            &ldquo;Crafted for the modern woman — graceful, confident and effortlessly stylish.&rdquo;
-          </blockquote>
-          <span className="text-xs tracking-[0.3em] font-semibold text-[#B68D56] uppercase">
-            IRA LIFESTYLE &bull; EST. 2025
+        {/* 4. THE CORE VALUES OF OUR FAMILY BRAND */}
+        <div className="text-center mb-5 mt-5 pt-3">
+          <span className="text-uppercase fw-semibold" style={{ fontSize: '0.74rem', letterSpacing: '0.2em', color: 'var(--gold-primary)' }}>
+            OUR BEDROCK VALUES
           </span>
+          <h2 className="font-serif fs-2 fw-normal text-dark mt-1">
+            What Drives IRA Everyday
+          </h2>
+        </div>
+
+        <div className="row g-4 mb-5">
+          <div className="col-12 col-md-4">
+            <div className="p-4 bg-white rounded-3 border h-100 text-center shadow-sm">
+              <div className="d-inline-flex p-3 rounded-circle mb-3" style={{ backgroundColor: 'var(--gold-soft)', color: 'var(--gold-primary)' }}>
+                <Heart size={26} fill="currentColor" />
+              </div>
+              <h5 className="font-serif fw-bold text-dark mb-2">Couple Dedication</h5>
+              <p className="text-muted small mb-0" style={{ lineHeight: '1.75' }}>
+                Nikhil and Anju personally review every silhouette, fabric batch, and design sketch, ensuring that every garment reflects genuine love and perfection.
+              </p>
+            </div>
+          </div>
+
+          <div className="col-12 col-md-4">
+            <div className="p-4 bg-white rounded-3 border h-100 text-center shadow-sm">
+              <div className="d-inline-flex p-3 rounded-circle mb-3" style={{ backgroundColor: 'var(--gold-soft)', color: 'var(--gold-primary)' }}>
+                <Users size={26} />
+              </div>
+              <h5 className="font-serif fw-bold text-dark mb-2">Parental Blessings</h5>
+              <p className="text-muted small mb-0" style={{ lineHeight: '1.75' }}>
+                Every achievement is dedicated to the parents whose steadfast faith, prayers, and sacrifices turned a young couple&apos;s passion into a living legacy.
+              </p>
+            </div>
+          </div>
+
+          <div className="col-12 col-md-4">
+            <div className="p-4 bg-white rounded-3 border h-100 text-center shadow-sm">
+              <div className="d-inline-flex p-3 rounded-circle mb-3" style={{ backgroundColor: 'var(--gold-soft)', color: 'var(--gold-primary)' }}>
+                <Sparkles size={26} />
+              </div>
+              <h5 className="font-serif fw-bold text-dark mb-2">Guruvayoor Heritage</h5>
+              <p className="text-muted small mb-0" style={{ lineHeight: '1.75' }}>
+                Deeply rooted in the spiritual culture and traditional handloom pride of Thrissur, Kerala &mdash; carrying authentic elegance to modern wardrobes worldwide.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 5. FOUNDERS' NOTE */}
+        <div 
+          className="bg-white p-5 rounded-3 border text-center shadow-sm my-5"
+          style={{ borderColor: 'rgba(212, 185, 142, 0.45)' }}
+        >
+          <p className="font-editorial fst-italic display-6 text-dark mb-3 mx-auto" style={{ maxWidth: '820px', lineHeight: '1.45' }}>
+            &ldquo;IRA Lifestyle is the living manifestation of our shared love, nurtured by our parents&apos; relentless faith and blessed by the sacred soil of Guruvayoor. We weave devotion, family values, and timeless grace into every thread.&rdquo;
+          </p>
+          <span className="text-uppercase fw-semibold d-block" style={{ fontSize: '0.84rem', letterSpacing: '0.18em', color: 'var(--gold-primary)' }}>
+            &mdash; Nikhil &amp; Anju
+          </span>
+          <small className="text-muted" style={{ fontSize: '0.74rem', letterSpacing: '0.08em' }}>
+            Founders, IRA Lifestyle &bull; Guruvayoor, Thrissur
+          </small>
         </div>
       </div>
     </div>

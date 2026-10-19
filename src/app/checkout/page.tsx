@@ -1,54 +1,140 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
-import { ShieldCheck, Truck, ArrowLeft, Check, Lock, ShoppingBag } from 'lucide-react';
-import { useCart } from '@/context/CartWishlistContext';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { useCart } from '@/context/CartContext';
+import { useAuth } from '@/context/AuthContext';
+import { 
+  CheckCircle2, 
+  ShieldCheck, 
+  Lock, 
+  ArrowLeft, 
+  Truck, 
+  CreditCard, 
+  Sparkles,
+  MessageSquare,
+  Clock
+} from 'lucide-react';
+
+function generateWhatsAppOrderMessage(order: any) {
+  const itemsText = order.items
+    ?.map(
+      (item: any, i: number) =>
+        `${i + 1}. *${item.title}*\n   Size: ${item.size} | Qty: ${item.quantity} | ₹${(item.price * item.quantity).toLocaleString('en-IN')}`
+    )
+    .join('\n');
+
+  return `*✨ IRA LIFESTYLE - ORDER BILL & DETAILS ✨*
+----------------------------------------
+*Order ID:* #${order.orderId}
+*Order Status:* 🟡 PENDING (Verification)
+*Date:* ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+
+*👤 Customer Details:*
+• *Name:* ${order.customer.fullName}
+• *Phone:* ${order.customer.phone}
+• *Email:* ${order.customer.email}
+
+*📍 Delivery Address:*
+${order.shippingAddress.address}, ${order.shippingAddress.city}, ${order.shippingAddress.state} - ${order.shippingAddress.pincode}
+Country: ${order.shippingAddress.country || 'India'}
+
+*🛍️ Order Items:*
+${itemsText}
+
+----------------------------------------
+*Subtotal:* ₹${order.subtotal?.toLocaleString('en-IN')}
+${order.discount ? `*Discount:* -₹${order.discount.toLocaleString('en-IN')}\n` : ''}*Delivery:* FREE EXPRESS
+*Grand Total:* ₹${order.total?.toLocaleString('en-IN')}
+*Payment Mode:* ${order.paymentMethod}
+----------------------------------------
+_Please verify my order details & confirm delivery schedule. Thank you!_`;
+}
 
 export default function CheckoutPage() {
-  const { cart, cartTotal, clearCart } = useCart();
-  const [formData, setFormData] = useState({
-    customerName: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    state: 'Delhi',
-    pincode: '',
-    paymentMethod: 'upi' as 'cod' | 'upi' | 'card',
+  const router = useRouter();
+  const { cart, cartSubtotal, discount, clearCart } = useCart();
+  const { user, loginWithGoogle } = useAuth();
+
+  const [form, setForm] = useState({
+    fullName: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    address: user?.address || '',
+    city: user?.city || '',
+    state: user?.state || 'Maharashtra',
+    pincode: user?.pincode || '',
+    country: 'India',
+    paymentMethod: 'Instant UPI / QR Code (Google Pay, PhonePe, Paytm)',
   });
-  const [loading, setLoading] = useState(false);
-  const [orderConfirmed, setOrderConfirmed] = useState<any | null>(null);
 
-  const freeShipping = cartTotal >= 999;
-  const shippingFee = freeShipping ? 0 : 99;
-  const finalTotal = cartTotal + shippingFee;
+  React.useEffect(() => {
+    if (user) {
+      setForm((prev) => ({
+        ...prev,
+        fullName: prev.fullName || user.name || '',
+        email: prev.email || user.email || '',
+        phone: prev.phone || user.phone || '',
+        address: prev.address || user.address || '',
+        city: prev.city || user.city || '',
+        state: prev.state || user.state || 'Maharashtra',
+        pincode: prev.pincode || user.pincode || '',
+      }));
+    }
+  }, [user]);
 
-  const handleSubmitOrder = async (e: React.FormEvent) => {
+  const [placing, setPlacing] = useState(false);
+  const [placedOrder, setPlacedOrder] = useState<any>(null);
+  const [whatsappUrl, setWhatsappUrl] = useState('');
+
+  const shippingFee = 0;
+  const grandTotal = Math.max(0, cartSubtotal - discount + shippingFee);
+
+  if (cart.length === 0 && !placedOrder) {
+    return (
+      <div className="py-5 text-center min-vh-60 d-flex flex-column align-items-center justify-content-center" style={{ backgroundColor: '#FAF7F2' }}>
+        <h3 className="font-serif">No Items in Checkout</h3>
+        <p className="text-muted small mb-4">Please add garments to your bag before proceeding to checkout.</p>
+        <Link href="/shop" className="btn-ira-gold">EXPLORE COLLECTION</Link>
+      </div>
+    );
+  }
+
+  const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (cart.length === 0) return;
-    setLoading(true);
+    setPlacing(true);
 
     try {
       const orderPayload = {
-        customerName: formData.customerName,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
-        city: formData.city,
-        state: formData.state,
-        pincode: formData.pincode,
-        paymentMethod: formData.paymentMethod,
-        totalAmount: finalTotal,
-        items: cart.map((item) => ({
-          productId: item.product.id,
-          name: item.product.name,
-          price: item.product.price,
-          size: item.size,
-          quantity: item.quantity,
-          image: item.product.image,
+        customer: {
+          fullName: form.fullName,
+          email: form.email,
+          phone: form.phone,
+        },
+        shippingAddress: {
+          address: form.address,
+          city: form.city,
+          state: form.state,
+          pincode: form.pincode,
+          country: form.country,
+        },
+        items: cart.map((c) => ({
+          productId: c.product.id,
+          title: c.product.title,
+          price: c.product.price,
+          size: c.selectedSize,
+          quantity: c.quantity,
+          image: c.product.image,
         })),
+        subtotal: cartSubtotal,
+        discount,
+        shipping: shippingFee,
+        total: grandTotal,
+        paymentMethod: form.paymentMethod,
+        orderStatus: 'Pending',
+        paymentStatus: 'pending',
       };
 
       const res = await fetch('/api/orders', {
@@ -59,368 +145,370 @@ export default function CheckoutPage() {
 
       const data = await res.json();
       if (data.success && data.order) {
-        setOrderConfirmed(data.order);
+        setPlacedOrder(data.order);
         clearCart();
-      } else {
-        // Fallback demo order
-        setOrderConfirmed({
-          id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-          customerName: formData.customerName,
-          totalAmount: finalTotal,
-          paymentMethod: formData.paymentMethod,
-        });
-        clearCart();
+
+        // Prepare WhatsApp message URL to +91 99954 66002
+        const msg = generateWhatsAppOrderMessage(data.order);
+        const waUrl = `https://wa.me/919995466002?text=${encodeURIComponent(msg)}`;
+        setWhatsappUrl(waUrl);
+
+        if (typeof window !== 'undefined') {
+          window.open(waUrl, '_blank');
+        }
       }
-    } catch {
-      setOrderConfirmed({
-        id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-        customerName: formData.customerName,
-        totalAmount: finalTotal,
-        paymentMethod: formData.paymentMethod,
-      });
-      clearCart();
+    } catch (err) {
+      console.error('Order placement failed', err);
     } finally {
-      setLoading(false);
+      setPlacing(false);
     }
   };
 
-  if (orderConfirmed) {
+  if (placedOrder) {
+    const waLink = whatsappUrl || `https://wa.me/919995466002?text=${encodeURIComponent(generateWhatsAppOrderMessage(placedOrder))}`;
+
     return (
-      <div className="w-full bg-[#FAF7F2] min-h-[75vh] flex items-center justify-center py-16 px-4">
-        <div className="max-w-lg w-full bg-white p-8 sm:p-10 rounded-xs border border-[#EDE5D8] text-center shadow-lg animate-fadeIn">
-          <div className="w-16 h-16 rounded-full bg-[#EAF2EC] text-[#3F6A44] flex items-center justify-center mx-auto mb-5">
-            <Check className="w-8 h-8 stroke-[2]" />
-          </div>
-          <span className="text-[11px] tracking-[0.25em] text-[#B68D56] uppercase font-semibold block mb-1">
-            ORDER CONFIRMED
-          </span>
-          <h2
-            style={{ fontFamily: 'var(--font-serif)' }}
-            className="text-3xl text-[#231F1C] font-normal mb-2"
+      <div className="py-5 text-center min-vh-70 d-flex align-items-center justify-content-center" style={{ backgroundColor: '#FAF7F2' }}>
+        <div className="bg-white p-4 p-md-5 rounded border shadow-lg mx-auto" style={{ maxWidth: '640px' }}>
+          {/* Order Status Badge */}
+          <div 
+            className="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-3"
+            style={{ backgroundColor: '#FFF3CD', border: '1px solid #FFE69C', color: '#664D03', fontSize: '0.78rem', fontWeight: 600 }}
           >
-            Thank You, {orderConfirmed.customerName}!
-          </h2>
-          <p className="text-xs text-[#6F665C] font-light mb-6">
-            Your luxury order <strong className="text-[#231F1C]">#{orderConfirmed.id}</strong> has been placed with IRA Lifestyle. We have dispatched a confirmation email to you.
+            <Clock size={15} />
+            <span>ORDER STATUS: PENDING VERIFICATION</span>
+          </div>
+
+          <h2 className="font-serif fs-2 text-dark mt-1 mb-2">Thank You, {placedOrder.customer.fullName}</h2>
+          <p className="text-muted small mb-4" style={{ lineHeight: '1.7' }}>
+            Your order <strong>#{placedOrder.orderId}</strong> has been registered with status <strong>Pending</strong>.
+            All bill data has been prepared to verify directly with our team on WhatsApp.
           </p>
 
-          <div className="bg-[#FAF7F2] p-4 rounded-xs border border-[#EDE5D8] text-xs text-[#5A524A] mb-8 space-y-1 text-left">
-            <div className="flex justify-between">
-              <span>Order Number:</span>
-              <strong className="text-[#231F1C]">{orderConfirmed.id}</strong>
+          {/* WhatsApp Direct Action Button */}
+          <div className="mb-4">
+            <a 
+              href={waLink}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-success d-inline-flex align-items-center justify-content-center gap-2 py-3 px-4 w-100 shadow-sm"
+              style={{ backgroundColor: '#25D366', borderColor: '#25D366', fontWeight: 600, fontSize: '0.92rem', borderRadius: '4px' }}
+            >
+              <MessageSquare size={19} />
+              <span>SEND BILL TO WHATSAPP (+91 99954 66002)</span>
+            </a>
+            <small className="text-muted d-block mt-2" style={{ fontSize: '0.74rem' }}>
+              Click above to send the bill details to WhatsApp and verify payment.
+            </small>
+          </div>
+
+          {/* Itemized Bill Box */}
+          <div className="p-3 p-md-4 bg-sand rounded border text-start mb-4" style={{ fontSize: '0.84rem' }}>
+            <div className="d-flex justify-content-between mb-2 pb-2 border-bottom">
+              <span className="text-muted">Order ID:</span>
+              <span className="fw-bold font-monospace text-dark">#{placedOrder.orderId}</span>
             </div>
-            <div className="flex justify-between">
-              <span>Payment Mode:</span>
-              <span className="uppercase font-semibold">{orderConfirmed.paymentMethod}</span>
+            <div className="d-flex justify-content-between mb-2">
+              <span className="text-muted">Order Status:</span>
+              <span className="badge" style={{ backgroundColor: '#FFF3CD', color: '#664D03', border: '1px solid #FFE69C' }}>
+                Pending Verification
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span>Total Paid:</span>
-              <strong className="text-[#B68D56] text-sm">₹{orderConfirmed.totalAmount.toLocaleString('en-IN')}</strong>
+            <div className="d-flex justify-content-between mb-2">
+              <span className="text-muted">Customer Phone:</span>
+              <span className="fw-medium text-dark">{placedOrder.customer.phone}</span>
+            </div>
+            <div className="d-flex justify-content-between mb-2">
+              <span className="text-muted">Delivery Address:</span>
+              <span className="text-end" style={{ maxWidth: '280px' }}>
+                {placedOrder.shippingAddress.address}, {placedOrder.shippingAddress.city} - {placedOrder.shippingAddress.pincode}
+              </span>
+            </div>
+            <div className="d-flex justify-content-between mb-3">
+              <span className="text-muted">Payment Mode:</span>
+              <span className="badge bg-secondary">{placedOrder.paymentMethod}</span>
+            </div>
+
+            {/* Ordered Garments List */}
+            <div className="pt-2 border-top mb-3">
+              <strong className="d-block mb-2 text-dark small">Ordered Garments:</strong>
+              <div className="d-flex flex-column gap-2">
+                {placedOrder.items?.map((it: any, idx: number) => (
+                  <div key={idx} className="d-flex justify-content-between text-muted small">
+                    <span>
+                      {it.title} <span className="text-dark fw-medium">({it.size} &times; {it.quantity})</span>
+                    </span>
+                    <span className="fw-medium text-dark">₹{(it.price * it.quantity).toLocaleString('en-IN')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="d-flex justify-content-between pt-2 border-top mt-2">
+              <span className="fw-bold text-dark fs-6">Grand Total:</span>
+              <span className="fw-bold fs-5" style={{ color: 'var(--gold-primary)' }}>
+                ₹{placedOrder.total?.toLocaleString('en-IN')}
+              </span>
             </div>
           </div>
 
-          <Link
-            href="/"
-            className="gold-btn w-full py-3.5 text-xs rounded-xs tracking-widest uppercase inline-block"
-          >
-            RETURN TO HOME
+          <Link href="/shop" className="btn btn-outline-secondary px-4 py-2" style={{ fontSize: '0.8rem', letterSpacing: '0.08em' }}>
+            CONTINUE SHOPPING
           </Link>
         </div>
-      </div>
-    );
-  }
-
-  if (cart.length === 0) {
-    return (
-      <div className="w-full bg-[#FAF7F2] min-h-[60vh] flex flex-col items-center justify-center py-16 px-4 text-center">
-        <div className="w-16 h-16 rounded-full bg-[#F4EFE6] text-[#B68D56] flex items-center justify-center mb-4">
-          <ShoppingBag className="w-8 h-8" />
-        </div>
-        <h2 style={{ fontFamily: 'var(--font-serif)' }} className="text-3xl text-[#231F1C] mb-2">
-          Your Bag Is Empty
-        </h2>
-        <p className="text-xs text-[#8F867C] max-w-sm mb-6">
-          Add pieces from our exquisite catalogue to proceed with secure checkout.
-        </p>
-        <Link href="/shop" className="gold-btn px-6 py-3 text-xs rounded-xs uppercase tracking-wider">
-          Explore The Shop
-        </Link>
       </div>
     );
   }
 
   return (
-    <div className="w-full bg-[#FAF7F2] min-h-screen py-10 md:py-16">
-      <div className="max-w-7xl mx-auto px-4 md:px-12">
-        <div className="flex items-center space-x-2 text-xs text-[#8F867C] mb-8">
-          <Link href="/shop" className="flex items-center space-x-1 hover:text-[#B68D56]">
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Continue Shopping</span>
+    <div className="py-5" style={{ backgroundColor: '#FAF7F2' }}>
+      <div className="container">
+        {/* Header */}
+        <div className="d-flex align-items-center gap-2 mb-4">
+          <Link href="/cart" className="text-muted text-decoration-none small hover-gold d-flex align-items-center gap-1">
+            <ArrowLeft size={14} /> Back to Bag
           </Link>
+          <span className="mx-2 text-muted">/</span>
+          <span className="fw-semibold text-dark small">Checkout &bull; WhatsApp Bill Verification</span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
-          {/* Left: Shipping & Payment Form */}
-          <div className="lg:col-span-7 bg-white p-6 sm:p-10 rounded-xs border border-[#EDE5D8] shadow-xs">
-            <div className="flex items-center justify-between pb-4 mb-6 border-b border-[#EDE5D8]">
-              <h2
-                style={{ fontFamily: 'var(--font-serif)' }}
-                className="text-2xl sm:text-3xl text-[#231F1C] font-normal"
-              >
-                Delivery Address
-              </h2>
-              <div className="flex items-center space-x-1 text-[11px] text-[#3F6A44]">
-                <Lock className="w-3.5 h-3.5" />
-                <span>256-bit Encrypted Checkout</span>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmitOrder} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-[#4A423A] mb-1.5">
-                    Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.customerName}
-                    onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                    placeholder="First and last name"
-                    className="w-full px-4 py-3 bg-[#FAF7F2] border border-[#EDE5D8] rounded-xs text-xs text-[#231F1C] focus:outline-none focus:border-[#B68D56]"
-                  />
+        <form onSubmit={handlePlaceOrder}>
+          <div className="row gy-4">
+            {/* Left: Shipping & Payment Details */}
+            <div className="col-12 col-lg-7">
+              {/* Shipping Address */}
+              <div className="bg-white p-4 p-md-5 rounded border shadow-sm mb-4">
+                <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                  <h4 className="font-serif fs-5 mb-0 text-dark">1. Delivery Address</h4>
+                  {!user && (
+                    <button
+                      type="button"
+                      onClick={() => loginWithGoogle()}
+                      className="btn btn-sm btn-outline-dark"
+                      style={{ fontSize: '0.72rem' }}
+                    >
+                      Prefill with Google
+                    </button>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-[#4A423A] mb-1.5">
-                    Email Address (for order tracking) *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="e.g. you@example.com"
-                    className="w-full px-4 py-3 bg-[#FAF7F2] border border-[#EDE5D8] rounded-xs text-xs text-[#231F1C] focus:outline-none focus:border-[#B68D56]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[#4A423A] mb-1.5">
-                  Phone Number (for courier delivery updates) *
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+91 98765 43210"
-                  className="w-full px-4 py-3 bg-[#FAF7F2] border border-[#EDE5D8] rounded-xs text-xs text-[#231F1C] focus:outline-none focus:border-[#B68D56]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[#4A423A] mb-1.5">
-                  Street Address &amp; House / Apartment *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="Apartment, suite, building, street"
-                  className="w-full px-4 py-3 bg-[#FAF7F2] border border-[#EDE5D8] rounded-xs text-xs text-[#231F1C] focus:outline-none focus:border-[#B68D56]"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-[#4A423A] mb-1.5">
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    placeholder="City"
-                    className="w-full px-4 py-3 bg-[#FAF7F2] border border-[#EDE5D8] rounded-xs text-xs text-[#231F1C] focus:outline-none focus:border-[#B68D56]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-[#4A423A] mb-1.5">
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.state}
-                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                    placeholder="State"
-                    className="w-full px-4 py-3 bg-[#FAF7F2] border border-[#EDE5D8] rounded-xs text-xs text-[#231F1C] focus:outline-none focus:border-[#B68D56]"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-[#4A423A] mb-1.5">
-                    Pincode *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.pincode}
-                    onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
-                    placeholder="6-digit pin"
-                    className="w-full px-4 py-3 bg-[#FAF7F2] border border-[#EDE5D8] rounded-xs text-xs text-[#231F1C] focus:outline-none focus:border-[#B68D56]"
-                  />
-                </div>
-              </div>
-
-              {/* Payment Method Selector */}
-              <div className="pt-6 border-t border-[#EDE5D8] mt-6">
-                <h3 className="text-sm font-semibold text-[#231F1C] uppercase tracking-wider mb-3">
-                  Payment Method
-                </h3>
-                <div className="space-y-2.5">
-                  <label
-                    className={`flex items-center justify-between p-3.5 border rounded-xs cursor-pointer transition-colors ${
-                      formData.paymentMethod === 'upi'
-                        ? 'border-[#B68D56] bg-[#FAF7F2]'
-                        : 'border-[#EDE5D8] bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="radio"
-                        name="payment"
-                        checked={formData.paymentMethod === 'upi'}
-                        onChange={() => setFormData({ ...formData, paymentMethod: 'upi' })}
-                        className="text-[#B68D56] focus:ring-[#B68D56]"
-                      />
-                      <span className="text-xs font-medium text-[#231F1C]">
-                        UPI / QR (Google Pay, PhonePe, Paytm, BHIM)
-                      </span>
-                    </div>
-                    <span className="text-[10px] bg-[#EAF2EC] text-[#3F6A44] font-semibold px-2 py-0.5 rounded-xs">
-                      INSTANT
-                    </span>
-                  </label>
-
-                  <label
-                    className={`flex items-center justify-between p-3.5 border rounded-xs cursor-pointer transition-colors ${
-                      formData.paymentMethod === 'card'
-                        ? 'border-[#B68D56] bg-[#FAF7F2]'
-                        : 'border-[#EDE5D8] bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="radio"
-                        name="payment"
-                        checked={formData.paymentMethod === 'card'}
-                        onChange={() => setFormData({ ...formData, paymentMethod: 'card' })}
-                        className="text-[#B68D56] focus:ring-[#B68D56]"
-                      />
-                      <span className="text-xs font-medium text-[#231F1C]">
-                        Credit / Debit Cards (Visa, Mastercard, RuPay, Amex)
-                      </span>
-                    </div>
-                  </label>
-
-                  <label
-                    className={`flex items-center justify-between p-3.5 border rounded-xs cursor-pointer transition-colors ${
-                      formData.paymentMethod === 'cod'
-                        ? 'border-[#B68D56] bg-[#FAF7F2]'
-                        : 'border-[#EDE5D8] bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="radio"
-                        name="payment"
-                        checked={formData.paymentMethod === 'cod'}
-                        onChange={() => setFormData({ ...formData, paymentMethod: 'cod' })}
-                        className="text-[#B68D56] focus:ring-[#B68D56]"
-                      />
-                      <span className="text-xs font-medium text-[#231F1C]">
-                        Cash on Delivery (Pay at Doorstep)
-                      </span>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="gold-btn w-full py-4 text-xs tracking-[0.2em] uppercase rounded-xs font-semibold mt-6 shadow-md"
-              >
-                {loading ? 'PROCESSING ORDER...' : `COMPLETE ORDER (₹${finalTotal.toLocaleString('en-IN')})`}
-              </button>
-            </form>
-          </div>
-
-          {/* Right: Order Summary */}
-          <div className="lg:col-span-5 bg-[#F4EFE6] p-6 sm:p-8 rounded-xs border border-[#EDE5D8]">
-            <h3
-              style={{ fontFamily: 'var(--font-serif)' }}
-              className="text-2xl text-[#231F1C] font-normal mb-5 pb-3 border-b border-[#EDE5D8]"
-            >
-              Order Summary ({cart.length} items)
-            </h3>
-
-            <div className="divide-y divide-[#EDE5D8] max-h-80 overflow-y-auto mb-6 pr-1">
-              {cart.map((item) => (
-                <div key={`${item.product.id}-${item.size}`} className="py-3 flex gap-3">
-                  <div className="relative w-16 h-20 bg-[#EDE5D8] rounded-xs overflow-hidden flex-shrink-0">
-                    <Image
-                      src={item.product.image}
-                      alt={item.product.name}
-                      fill
-                      className="object-cover"
+                <div className="row g-3">
+                  <div className="col-12">
+                    <label className="form-label small fw-semibold">Full Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={form.fullName}
+                      onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                      placeholder="e.g. Radhika Sharma"
+                      className="form-control"
                     />
                   </div>
-                  <div className="flex-1 flex flex-col justify-between text-xs">
-                    <div>
-                      <h4 className="font-medium text-[#231F1C] line-clamp-1">
-                        {item.product.name}
-                      </h4>
-                      <p className="text-[#7B7268] text-[11px] mt-0.5">
-                        Size: {item.size} &bull; Qty: {item.quantity}
-                      </p>
-                    </div>
-                    <div className="font-semibold text-[#231F1C]">
-                      ₹{(item.product.price * item.quantity).toLocaleString('en-IN')}
-                    </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small fw-semibold">Email Address *</label>
+                    <input
+                      type="email"
+                      required
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      placeholder="radhika@example.com"
+                      className="form-control"
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-6">
+                    <label className="form-label small fw-semibold">Phone Number (WhatsApp) *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={form.phone}
+                      onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                      placeholder="+91 99954 66002"
+                      className="form-control"
+                    />
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label small fw-semibold">Street Address / House / Flat *</label>
+                    <input
+                      type="text"
+                      required
+                      value={form.address}
+                      onChange={(e) => setForm({ ...form, address: e.target.value })}
+                      placeholder="Flat 402, Royal Residency, High Street"
+                      className="form-control"
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label small fw-semibold">City *</label>
+                    <input
+                      type="text"
+                      required
+                      value={form.city}
+                      onChange={(e) => setForm({ ...form, city: e.target.value })}
+                      placeholder="Thrissur / Kochi / Mumbai"
+                      className="form-control"
+                    />
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label small fw-semibold">State *</label>
+                    <select
+                      value={form.state}
+                      onChange={(e) => setForm({ ...form, state: e.target.value })}
+                      className="form-select"
+                    >
+                      <option value="Kerala">Kerala</option>
+                      <option value="Maharashtra">Maharashtra</option>
+                      <option value="Delhi">Delhi NCR</option>
+                      <option value="Karnataka">Karnataka</option>
+                      <option value="Tamil Nadu">Tamil Nadu</option>
+                      <option value="Telangana">Telangana</option>
+                      <option value="Gujarat">Gujarat</option>
+                      <option value="Rajasthan">Rajasthan</option>
+                      <option value="West Bengal">West Bengal</option>
+                      <option value="Punjab">Punjab</option>
+                      <option value="Other">Other State</option>
+                    </select>
+                  </div>
+
+                  <div className="col-12 col-md-4">
+                    <label className="form-label small fw-semibold">Pincode *</label>
+                    <input
+                      type="text"
+                      required
+                      maxLength={6}
+                      value={form.pincode}
+                      onChange={(e) => setForm({ ...form, pincode: e.target.value })}
+                      placeholder="680101"
+                      className="form-control"
+                    />
                   </div>
                 </div>
-              ))}
+              </div>
+
+              {/* Payment Methods */}
+              <div className="bg-white p-4 p-md-5 rounded border shadow-sm">
+                <div className="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
+                  <CreditCard size={20} color="var(--gold-primary)" />
+                  <h4 className="font-serif fs-5 mb-0 text-dark">2. Select Payment Mode</h4>
+                </div>
+
+                <div className="d-flex flex-column gap-3">
+                  <label className="d-flex align-items-center gap-3 p-3 border rounded cursor-pointer">
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="Instant UPI / QR Code (Google Pay, PhonePe, Paytm)"
+                      checked={form.paymentMethod === 'Instant UPI / QR Code (Google Pay, PhonePe, Paytm)'}
+                      onChange={() => setForm({ ...form, paymentMethod: 'Instant UPI / QR Code (Google Pay, PhonePe, Paytm)' })}
+                    />
+                    <div>
+                      <strong className="d-block" style={{ fontSize: '0.88rem' }}>Instant UPI / QR Code (Google Pay, PhonePe, Paytm)</strong>
+                      <span className="text-muted small">Fast & secure frictionless checkout with zero extra fees</span>
+                    </div>
+                  </label>
+
+                  <label className="d-flex align-items-center gap-3 p-3 border rounded cursor-pointer">
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="Credit / Debit Cards & Net Banking"
+                      checked={form.paymentMethod === 'Credit / Debit Cards & Net Banking'}
+                      onChange={() => setForm({ ...form, paymentMethod: 'Credit / Debit Cards & Net Banking' })}
+                    />
+                    <div>
+                      <strong className="d-block" style={{ fontSize: '0.88rem' }}>Credit / Debit Cards & Net Banking</strong>
+                      <span className="text-muted small">Visa, Mastercard, RuPay, Amex</span>
+                    </div>
+                  </label>
+
+                  <label className="d-flex align-items-center gap-3 p-3 border rounded cursor-pointer">
+                    <input
+                      type="radio"
+                      name="payment"
+                      value="Cash on Delivery (COD)"
+                      checked={form.paymentMethod === 'Cash on Delivery (COD)'}
+                      onChange={() => setForm({ ...form, paymentMethod: 'Cash on Delivery (COD)' })}
+                    />
+                    <div>
+                      <strong className="d-block" style={{ fontSize: '0.88rem' }}>Cash on Delivery (COD)</strong>
+                      <span className="text-muted small">Pay cash when your luxury parcel arrives at your doorstep</span>
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-2 text-xs text-[#6F665C] border-t border-[#EDE5D8] pt-4">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span className="font-medium text-[#231F1C]">
-                  ₹{cartTotal.toLocaleString('en-IN')}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Insured Doorstep Shipping</span>
-                <span className="font-medium text-[#3F6A44]">
-                  {freeShipping ? 'FREE' : '₹99'}
-                </span>
-              </div>
-              <div className="flex justify-between text-base font-semibold text-[#231F1C] pt-3 border-t border-[#EDE5D8]">
-                <span>Total Amount</span>
-                <span className="text-[#B68D56]">
-                  ₹{finalTotal.toLocaleString('en-IN')}
-                </span>
+            {/* Right: Order Review */}
+            <div className="col-12 col-lg-5">
+              <div className="bg-white p-4 rounded border shadow-sm position-sticky" style={{ top: '100px' }}>
+                <h5 className="font-serif fw-bold text-dark mb-3">Order Items ({cart.length})</h5>
+
+                <div className="d-flex flex-column gap-3 mb-4 max-vh-50 overflow-auto">
+                  {cart.map((c) => (
+                    <div key={`${c.product.id}-${c.selectedSize}`} className="d-flex gap-3 align-items-center pb-2 border-bottom">
+                      <div style={{ position: 'relative', width: '50px', height: '65px', borderRadius: '3px', overflow: 'hidden', flexShrink: 0 }}>
+                        <Image src={c.product.image} alt={c.product.title} fill sizes="50px" style={{ objectFit: 'cover', objectPosition: 'center 10%' }} />
+                      </div>
+                      <div className="flex-grow-1">
+                        <h6 className="mb-0 fw-semibold text-dark text-truncate" style={{ fontSize: '0.82rem', maxWidth: '200px' }}>
+                          {c.product.title}
+                        </h6>
+                        <small className="text-muted">Size: {c.selectedSize} &bull; Qty: {c.quantity}</small>
+                      </div>
+                      <span className="fw-bold text-nowrap" style={{ fontSize: '0.85rem' }}>
+                        ₹{(c.product.price * c.quantity).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="d-flex justify-content-between text-muted small mb-1">
+                  <span>Subtotal</span>
+                  <span>₹{cartSubtotal.toLocaleString('en-IN')}</span>
+                </div>
+
+                {discount > 0 && (
+                  <div className="d-flex justify-content-between text-success small mb-1">
+                    <span>Discount</span>
+                    <span>-₹{discount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
+
+                <div className="d-flex justify-content-between text-muted small mb-2">
+                  <span>Delivery</span>
+                  <span>{shippingFee === 0 ? <strong className="text-success">FREE</strong> : `₹${shippingFee}`}</span>
+                </div>
+
+                <div className="d-flex justify-content-between text-dark fw-bold fs-5 pt-3 border-top mb-3">
+                  <span>Total Payable</span>
+                  <span style={{ color: 'var(--gold-primary)' }}>₹{grandTotal.toLocaleString('en-IN')}</span>
+                </div>
+
+                {/* Continue Order & Send Bill Button */}
+                <button
+                  type="submit"
+                  disabled={placing}
+                  className="btn-ira-gold w-100 justify-content-center py-3 text-center mb-2"
+                >
+                  {placing ? 'SAVING ORDER & PREPARING BILL...' : `CONTINUE ORDER & BILL • ₹${grandTotal.toLocaleString('en-IN')}`}
+                </button>
+
+                <p className="text-muted small text-center mb-3" style={{ fontSize: '0.72rem', lineHeight: '1.5' }}>
+                  Clicking will save your order with <strong>Pending</strong> status and open WhatsApp (+91 99954 66002) with your complete bill for verification.
+                </p>
+
+                <div className="d-flex align-items-center justify-content-center gap-1 text-muted small text-center">
+                  <Lock size={14} color="var(--gold-primary)" />
+                  <span>256-Bit SSL Encrypted & Protected</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

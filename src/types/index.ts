@@ -1,49 +1,100 @@
 export interface Product {
-  id: string;
   _id?: string;
-  name: string;
+  id: string;
+  title: string;
   slug: string;
+  category: 'dresses' | 'kurtis' | 'sarees' | 'co-ord-sets' | 'new-arrivals' | string;
+  categoryLabel: string;
   price: number;
   originalPrice?: number;
-  category: 'Dresses' | 'Kurtis' | 'Sarees' | 'Co-ord Sets' | 'New Arrivals';
-  image: string;
-  images?: string[];
   rating: number;
   reviewsCount: number;
+  image: string;
+  gallery?: string[];
   description: string;
-  fabric: string;
-  care: string;
+  features?: string[];
+  fabric?: string;
+  care?: string;
   sizes: string[];
+  colors?: string[];
   inStock: boolean;
-  featured?: boolean;
+  isFeatured?: boolean;
   isNewArrival?: boolean;
+  bestseller?: boolean;
+  createdAt?: string;
 }
 
 export interface CartItem {
   product: Product;
-  size: string;
+  selectedSize: string;
+  selectedColor?: string;
   quantity: number;
 }
 
-export interface Order {
-  id: string;
-  customerName: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  state: string;
-  pincode: string;
-  items: CartItem[];
-  totalAmount: number;
-  paymentMethod: 'cod' | 'upi' | 'card';
-  status: 'pending' | 'confirmed' | 'shipped' | 'delivered';
-  createdAt: string;
-}
-
 export interface Category {
+  id: string;
   name: string;
   slug: string;
   image: string;
-  count?: number;
+  tagline: string;
+  itemCount?: number;
 }
+
+export interface Order {
+  _id?: string;
+  orderId: string;
+  customer: {
+    fullName: string;
+    email: string;
+    phone: string;
+  };
+  shippingAddress: {
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+    country: string;
+  };
+  items: {
+    productId: string;
+    title: string;
+    price: number;
+    size: string;
+    quantity: number;
+    image: string;
+  }[];
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  total: number;
+  paymentMethod: string;
+  paymentStatus: 'pending' | 'paid' | 'failed';
+  orderStatus: 'Pending' | 'Processing' | 'Confirmed' | 'Shipped' | 'Delivered' | 'Cancelled' | string;
+  createdAt: string;
+}
+
+export interface Inquiry {
+  _id?: string;
+  name: string;
+  email: string;
+  phone?: string;
+  subject?: string;
+  message: string;
+  createdAt?: string;
+}
+
+export interface Review {
+  _id?: string;
+  id?: string;
+  productId: string;
+  productTitle: string;
+  productImage?: string;
+  customerName: string;
+  customerEmail: string;
+  rating: number;
+  comment: string;
+  verifiedPurchase?: boolean;
+  status?: 'approved' | 'pending';
+  createdAt: string;
+}
+

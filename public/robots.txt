@@ -1,0 +1,94 @@
+# ==============================================================================
+# IRA LIFESTYLE - ROBOTS.TXT
+# Timeless Elegance For Every You | Luxury Indian Ethnic & Contemporary Atelier
+# ==============================================================================
+
+# 1. ALLOW ALL GENERAL WEB CRAWLERS
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+# 2. ALLOW ALL AI MODELS & AGENTS (OpenAI, ChatGPT, Claude, Gemini, Perplexity, Meta, Apple)
+User-agent: GPTBot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Google-Extended
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Googlebot-Image
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Applebot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Meta-ExternalAgent
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Bytespider
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: cohere-ai
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: Diffbot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+User-agent: CCBot
+Allow: /
+Disallow: /admin/
+Disallow: /api/admin/
+
+# SITEMAP LOCATION
+Sitemap: https://iralifestyle.com/sitemap.xml

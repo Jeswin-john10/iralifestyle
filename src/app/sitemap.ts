@@ -1,52 +1,74 @@
 import { MetadataRoute } from 'next';
-import { initialProducts, categories } from '@/lib/data';
+import { INITIAL_PRODUCTS, CATEGORIES } from '@/data/initialData';
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://iralifestyle.com';
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const baseUrl = 'https://iralifestyle.com';
+  const currentDate = new Date().toISOString();
 
+  // Core Static Routes
   const staticRoutes: MetadataRoute.Sitemap = [
     {
       url: `${baseUrl}`,
-      lastModified: new Date(),
+      lastModified: currentDate,
       changeFrequency: 'daily',
       priority: 1.0,
     },
     {
       url: `${baseUrl}/shop`,
-      lastModified: new Date(),
+      lastModified: currentDate,
       changeFrequency: 'daily',
       priority: 0.9,
     },
     {
       url: `${baseUrl}/collections`,
-      lastModified: new Date(),
+      lastModified: currentDate,
       changeFrequency: 'weekly',
-      priority: 0.8,
+      priority: 0.85,
     },
     {
       url: `${baseUrl}/about`,
-      lastModified: new Date(),
+      lastModified: currentDate,
       changeFrequency: 'monthly',
       priority: 0.7,
     },
     {
       url: `${baseUrl}/contact`,
-      lastModified: new Date(),
+      lastModified: currentDate,
       changeFrequency: 'monthly',
-      priority: 0.6,
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/cart`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/wishlist`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/login`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.5,
     },
   ];
 
-  const categoryRoutes: MetadataRoute.Sitemap = categories.map((cat) => ({
-    url: `${baseUrl}/shop?category=${encodeURIComponent(cat.name)}`,
-    lastModified: new Date(),
-    changeFrequency: 'weekly',
+  // Category Routes
+  const categoryRoutes: MetadataRoute.Sitemap = CATEGORIES.map((cat) => ({
+    url: `${baseUrl}/shop/${cat.slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'daily',
     priority: 0.8,
   }));
 
-  const productRoutes: MetadataRoute.Sitemap = initialProducts.map((p) => ({
-    url: `${baseUrl}/product/${p.id}`,
-    lastModified: new Date(),
+  // Product Routes
+  const productRoutes: MetadataRoute.Sitemap = INITIAL_PRODUCTS.map((prod) => ({
+    url: `${baseUrl}/product/${prod.id}`,
+    lastModified: currentDate,
     changeFrequency: 'weekly',
     priority: 0.8,
   }));

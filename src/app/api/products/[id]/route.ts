@@ -1,62 +1,48 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { ProductModel } from '@/models/Product';
-import { initialProducts } from '@/lib/data';
+import { NextResponse } from 'next/server';
+import { getProductByIdOrSlug, updateProduct, deleteProduct } from '@/lib/dbStore';
 
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const db = await connectToDatabase();
-
-    if (db) {
-      const product = await ProductModel.findOne({
-        $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { id }, { slug: id }],
-      }).lean();
-
-      if (product) {
-        return NextResponse.json({
-          success: true,
-          product: { ...product, id: product._id?.toString() || product.id },
-        });
-      }
+    const product = await getProductByIdOrSlug(id);
+    if (!product) {
+      return NextResponse.json({ success: false, message: 'Product not found' }, { status: 404 });
     }
-
-    // Fallback search
-    const found = initialProducts.find(
-      (p) => p.id === id || p.slug === id
-    );
-
-    if (found) {
-      return NextResponse.json({ success: true, product: found });
-    }
-
-    return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
+    return NextResponse.json({ success: true, product });
   } catch (error) {
-    console.error('Product GET Error:', error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const updated = await updateProduct(id, body);
+    if (!updated) {
+      return NextResponse.json({ success: false, message: 'Product not found or update failed' }, { status: 404 });
+    }
+    return NextResponse.json({ success: true, product: updated });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }
 
 export async function DELETE(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const db = await connectToDatabase();
-
-    if (db) {
-      await ProductModel.deleteOne({
-        $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { id }, { slug: id }],
-      });
-    }
-
-    return NextResponse.json({ success: true, message: 'Product deleted' });
+    const success = await deleteProduct(id);
+    return NextResponse.json({ success });
   } catch (error) {
-    console.error('Product DELETE Error:', error);
-    return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }

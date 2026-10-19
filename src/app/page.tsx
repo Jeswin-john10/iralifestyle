@@ -1,561 +1,682 @@
 'use client';
 
-import React, { useState } from 'react';
-import Image from 'next/image';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import {
-  ArrowRight,
-  ArrowLeft,
-  Heart,
-  Star,
+import Image from 'next/image';
+import { 
+  ArrowRight, 
+  ArrowLeft, 
+  Star, 
+  Heart, 
+  Eye, 
+  Sparkles, 
+  ShieldCheck, 
+  Truck, 
+  Headphones, 
   Gem,
-  ShieldCheck,
-  Truck,
-  Headphones,
-  ShoppingBag,
-  Check,
+  CheckCircle2,
+  Mail
 } from 'lucide-react';
-import { useCart } from '@/context/CartWishlistContext';
-import { categories, initialProducts } from '@/lib/data';
+import { CATEGORIES, INITIAL_PRODUCTS } from '@/data/initialData';
+import { Product } from '@/types';
+import { useCart } from '@/context/CartContext';
+import QuickViewModal from '@/components/QuickViewModal';
+import ProductCard from '@/components/ProductCard';
+import CategoryShowcase from '@/components/CategoryShowcase';
+import FeaturedCollection from '@/components/FeaturedCollection';
+
+const HERO_SLIDES = [
+  {
+    id: 1,
+    tag: 'IRA LIFESTYLE',
+    title: 'Timeless Elegance',
+    subtitle: 'For Every You',
+    desc: 'Crafted for the modern woman — graceful, confident and effortlessly stylish. Discover our latest collection of ethnic and contemporary wear.',
+    link: '/shop',
+    btnText: 'EXPLORE COLLECTION',
+    imageDesktop: '/images/hero_model_desktop.jpg',
+    imageMobile: '/images/hero_model_mobile.jpg',
+    objectPositionDesktop: 'center 20%',
+    objectPositionMobile: 'center 8%',
+    scriptTop: 'Grace',
+    scriptBottom: 'IN EVERY THREAD',
+  },
+  {
+    id: 2,
+    tag: 'ROYAL HERITAGE',
+    title: 'Pure Silk Symphony',
+    subtitle: 'Woven Traditions',
+    desc: 'Handcrafted Banarasi and Kanjivaram silks tailored for timeless celebrations, weddings and unforgettable festive moments.',
+    link: '/shop/sarees',
+    btnText: 'DISCOVER SAREES',
+    imageDesktop: '/images/cat_saree_hd.jpg',
+    imageMobile: '/images/cat_saree_hd.jpg',
+    objectPositionDesktop: 'center 15%',
+    objectPositionMobile: 'center 6%',
+    scriptTop: 'Heritage',
+    scriptBottom: 'reimagined',
+  },
+  {
+    id: 3,
+    tag: 'NEW ARRIVALS',
+    title: 'Contemporary Grace',
+    subtitle: 'Modern Silhouettes',
+    desc: 'Exquisite festive co-ord sets and velvet ensembles designed to make an unforgettable statement wherever you go.',
+    link: '/shop/coord-sets',
+    btnText: 'VIEW CO-ORDS',
+    imageDesktop: '/images/cat_coord_hd.jpg',
+    imageMobile: '/images/cat_coord_hd.jpg',
+    objectPositionDesktop: 'center 18%',
+    objectPositionMobile: 'center 8%',
+    scriptTop: 'Luxury',
+    scriptBottom: 'redefined',
+  },
+];
+
+const TRUST_BADGES = [
+  {
+    icon: Truck,
+    title: 'FREE SHIPPING',
+    desc: 'On orders above ₹999',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'PREMIUM QUALITY',
+    desc: 'Crafted with care',
+  },
+  {
+    icon: Sparkles,
+    title: 'ETHNIC HERITAGE',
+    desc: 'Timeless traditions',
+  },
+  {
+    icon: Heart,
+    title: 'ELEGANT DESIGNS',
+    desc: 'For every occasion',
+  },
+];
+
+const STORY_PROPOSITIONS = [
+  {
+    icon: Gem,
+    title: 'Premium Quality Fabrics',
+    desc: 'Artisanal silks & chiffons',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Trusted Secure Portal',
+    desc: 'Bank-verified encrypted gateway',
+  },
+  {
+    icon: Truck,
+    title: 'Fast & Reliable Delivery',
+    desc: 'Express courier across India',
+  },
+  {
+    icon: Headphones,
+    title: 'Customer Support Always Here',
+    desc: 'Dedicated luxury styling help',
+  },
+];
 
 export default function HomePage() {
-  const { addToCart, toggleWishlist, isInWishlist } = useCart();
-  const [heroIndex, setHeroIndex] = useState(0);
-  const [email, setEmail] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
-  const [subscribing, setSubscribing] = useState(false);
-  const [notification, setNotification] = useState<string | null>(null);
+  const { toggleWishlist, isInWishlist } = useCart();
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS.slice(0, 5));
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
-  const heroSlides = [
-    {
-      image: '/images/hero-model.jpg',
-      subtitle: 'IRA LIFESTYLE',
-      title: 'Timeless Elegance For Every You',
-      description:
-        'Crafted for the modern woman — graceful, confident and effortlessly stylish. Discover our latest collection of ethnic and contemporary wear.',
-      script: 'Grace in every thread',
-    },
-    {
-      image: '/images/cat-dresses.jpg',
-      subtitle: 'FESTIVE COLLECTION',
-      title: 'Royal Silks & Zari Wonders',
-      description:
-        'Indulge in royal silhouettes woven from rich Chanderi silk and intricate antique gold needlework made for life’s grand celebrations.',
-      script: 'Elegance redefined',
-    },
-    {
-      image: '/images/cat-coord.jpg',
-      subtitle: 'NEW CONTEMPORARY',
-      title: 'Modern Grace, Classic Roots',
-      description:
-        'Impeccably tailored luxury co-ord sets designed to elevate your everyday sophistication with understated Indian craftsmanship.',
-      script: 'Pure artisan luxury',
-    },
-  ];
+  const activeSlide = HERO_SLIDES[currentSlideIndex];
 
-  const handleNextHero = () => {
-    setHeroIndex((prev) => (prev + 1) % heroSlides.length);
+  const [activeTrustIndex, setActiveTrustIndex] = useState(0);
+  const [trustRevealed, setTrustRevealed] = useState(false);
+  const trustScrollRef = useRef<HTMLDivElement>(null);
+  const trustSectionRef = useRef<HTMLDivElement>(null);
+
+  const [storyPropsRevealed, setStoryPropsRevealed] = useState(false);
+  const storyPropsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setTrustRevealed(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    if (trustSectionRef.current) {
+      observer.observe(trustSectionRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setStoryPropsRevealed(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 }
+    );
+    if (storyPropsRef.current) {
+      observer.observe(storyPropsRef.current);
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const handleTrustScroll = () => {
+    if (!trustScrollRef.current) return;
+    const { scrollLeft, clientWidth } = trustScrollRef.current;
+    const cardStep = clientWidth * 0.78;
+    const newIdx = Math.round(scrollLeft / cardStep);
+    setActiveTrustIndex(Math.min(TRUST_BADGES.length - 1, Math.max(0, newIdx)));
   };
 
-  const handlePrevHero = () => {
-    setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+  const scrollToTrustBadge = (index: number) => {
+    if (!trustScrollRef.current) return;
+    const cards = trustScrollRef.current.children;
+    if (cards[index]) {
+      (cards[index] as HTMLElement).scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      setActiveTrustIndex(index);
+    }
   };
 
-  const handleSubscribe = async (e: React.FormEvent) => {
+  useEffect(() => {
+    async function loadProducts() {
+      try {
+        const res = await fetch('/api/products?featured=true');
+        const data = await res.json();
+        if (data.products && data.products.length > 0) {
+          setProducts(data.products);
+        }
+      } catch (err) {
+        console.error('Failed to load featured products', err);
+      }
+    }
+    loadProducts();
+  }, []);
+
+  const handleNewsletter = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
-    setSubscribing(true);
+    if (!newsletterEmail) return;
+    setNewsletterStatus('loading');
     try {
       const res = await fetch('/api/newsletter', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: newsletterEmail }),
       });
-      if (res.ok) {
-        setSubscribed(true);
-        setEmail('');
+      const data = await res.json();
+      if (data.success) {
+        setNewsletterStatus('success');
+        setNewsletterEmail('');
+      } else {
+        setNewsletterStatus('error');
       }
     } catch {
-      setSubscribed(true);
-    } finally {
-      setSubscribing(false);
+      setNewsletterStatus('error');
     }
   };
 
-  const handleQuickAdd = (product: (typeof initialProducts)[0]) => {
-    addToCart(product);
-    setNotification(`Added "${product.name}" to your bag!`);
-    setTimeout(() => setNotification(null), 3000);
+  const handlePrevSlide = () => {
+    setCurrentSlideIndex((prev) => (prev === 0 ? HERO_SLIDES.length - 1 : prev - 1));
   };
 
-  const currentSlide = heroSlides[heroIndex];
+  const handleNextSlide = () => {
+    setCurrentSlideIndex((prev) => (prev === HERO_SLIDES.length - 1 ? 0 : prev + 1));
+  };
 
   return (
-    <div className="w-full relative">
-      {/* Toast Notification */}
-      {notification && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#231F1C] text-white px-5 py-3 rounded-sm shadow-xl flex items-center space-x-2 text-xs tracking-wider animate-fadeIn">
-          <Check className="w-4 h-4 text-[#B68D56]" />
-          <span>{notification}</span>
+    <div className="homepage-wrapper">
+      {/* 1. HERO SECTION (PREMIUM DESKTOP & MOBILE PERFECTION) */}
+      <section className="hero-premium-section pt-3 pt-lg-4 pb-0">
+        {/* Botanical Leaf Branch Watermark on Left Edge */}
+        <div className="hero-left-botanical-branch d-none d-md-block" aria-hidden="true">
+          <svg viewBox="0 0 100 300" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+            <path d="M10 290 Q30 200 15 130 T45 20" stroke="#D4B98E" strokeWidth="1.2" strokeOpacity="0.45" fill="none" />
+            <path d="M22 230 C45 210 55 190 40 180 C30 190 20 210 22 230 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.4" fill="none" />
+            <path d="M16 170 C40 155 48 135 35 125 C25 135 16 150 16 170 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.4" fill="none" />
+            <path d="M20 110 C48 95 52 75 38 68 C28 78 18 95 20 110 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.4" fill="none" />
+            <path d="M30 60 C55 50 60 30 45 25 C35 35 28 48 30 60 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.4" fill="none" />
+            <path d="M14 260 C-5 240 -8 220 2 215 C10 225 15 245 14 260 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.4" fill="none" />
+            <path d="M18 200 C-2 185 -4 165 6 160 C14 170 18 188 18 200 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.4" fill="none" />
+            <path d="M22 140 C2 125 0 105 10 100 C18 110 22 128 22 140 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.4" fill="none" />
+          </svg>
         </div>
-      )}
 
-      {/* 1. HERO SECTION */}
-      <section className="relative w-full bg-[#FAF7F2] overflow-hidden pt-2 pb-12 md:pb-16 border-b border-[#EDE5D8]/60">
-        <div className="max-w-7xl mx-auto px-4 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center min-h-[520px]">
-            {/* Left Content */}
-            <div className="lg:col-span-5 z-10 flex flex-col justify-center py-6">
-              <div className="flex items-center space-x-3 mb-4">
-                <span className="w-7 h-[1px] bg-[#B68D56]" />
-                <span className="text-[11px] tracking-[0.3em] font-semibold text-[#8F867C] uppercase">
-                  {currentSlide.subtitle}
-                </span>
-                <span className="w-7 h-[1px] bg-[#B68D56]" />
+        <div className="container position-relative">
+          {/* DESKTOP LAYOUT (>= 992px) */}
+          <div className="d-none d-lg-block pb-4">
+            <div className="row align-items-center gy-4">
+              {/* Left Hero Content */}
+              <div className="col-12 col-lg-5 pe-lg-4 animate-fade-in-up">
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <span className="text-uppercase fw-semibold" style={{ fontSize: '0.78rem', letterSpacing: '0.22em', color: 'var(--gold-primary)' }}>
+                    {activeSlide.tag}
+                  </span>
+                  <span style={{ width: '40px', height: '1px', backgroundColor: 'var(--gold-primary)' }}></span>
+                </div>
+
+                <h1 className="font-serif display-4 fw-normal text-dark mb-3 lh-sm" style={{ letterSpacing: '-0.01em' }}>
+                  {activeSlide.title} <br />
+                  <span className="fst-italic" style={{ color: 'var(--gold-primary)' }}>{activeSlide.subtitle}</span>
+                </h1>
+
+                <p className="text-muted mb-4 pe-lg-4" style={{ fontSize: '0.92rem', lineHeight: '1.7', minHeight: '48px' }}>
+                  {activeSlide.desc}
+                </p>
+
+                <div className="d-flex align-items-center gap-4 mb-4">
+                  <Link href={activeSlide.link} className="btn-ira-gold">
+                    {activeSlide.btnText} <ArrowRight size={16} />
+                  </Link>
+                </div>
+
+                {/* Slider Controls */}
+                <div className="d-flex align-items-center gap-3 pt-2 text-muted" style={{ fontSize: '0.8rem', letterSpacing: '0.12em' }}>
+                  <span className="fw-semibold text-dark">0{activeSlide.id} / 0{HERO_SLIDES.length}</span>
+                  <span className="text-muted" style={{ width: '40px', height: '1px', backgroundColor: '#D8D1C5' }}></span>
+                  <div className="d-flex gap-2">
+                    <button 
+                      onClick={handlePrevSlide}
+                      className="btn btn-sm btn-outline-secondary rounded-circle p-1 d-flex align-items-center justify-content-center"
+                      style={{ width: '28px', height: '28px' }}
+                      aria-label="Previous slide"
+                    >
+                      <ArrowLeft size={13} />
+                    </button>
+                    <button 
+                      onClick={handleNextSlide}
+                      className="btn btn-sm btn-outline-secondary rounded-circle p-1 d-flex align-items-center justify-content-center"
+                      style={{ width: '28px', height: '28px' }}
+                      aria-label="Next slide"
+                    >
+                      <ArrowRight size={13} />
+                    </button>
+                  </div>
+                </div>
               </div>
 
-              <h1
-                style={{ fontFamily: 'var(--font-serif)' }}
-                className="text-4xl sm:text-5xl lg:text-[54px] font-normal leading-[1.12] text-[#231F1C] mb-5 tracking-tight"
-              >
-                {currentSlide.title}
-              </h1>
+              {/* Right Hero Image (Seamless Luxury Visual) */}
+              <div className="col-12 col-lg-7 position-relative">
+                <div className="hero-desktop-image-wrapper">
+                  <Image
+                    src={activeSlide.imageDesktop}
+                    alt={`${activeSlide.title} - IRA Lifestyle`}
+                    fill
+                    priority
+                    sizes="(max-width: 992px) 100vw, 60vw"
+                    style={{ 
+                      objectFit: 'cover', 
+                      objectPosition: activeSlide.objectPositionDesktop || 'center 20%' 
+                    }}
+                  />
 
-              <p className="text-sm sm:text-base text-[#686057] leading-relaxed font-light mb-8 max-w-lg">
-                {currentSlide.description}
-              </p>
-
-              <div>
-                <Link
-                  href="/shop"
-                  className="gold-btn px-8 py-4 text-xs tracking-[0.2em] rounded-xs font-semibold inline-flex items-center space-x-2.5 shadow-sm"
-                >
-                  <span>EXPLORE COLLECTION</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-
-              {/* Slider Controls */}
-              <div className="flex items-center space-x-6 mt-10 text-xs text-[#7B7268] tracking-widest font-mono">
-                <span className="font-semibold text-[#231F1C]">
-                  0{heroIndex + 1} <span className="text-[#B68D56] font-normal">/</span> 0{heroSlides.length}
-                </span>
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={handlePrevHero}
-                    className="p-2 border border-[#EDE5D8] rounded-full hover:bg-[#F2ECE0] text-[#3D3731] transition-colors"
-                    aria-label="Previous Slide"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={handleNextHero}
-                    className="p-2 border border-[#EDE5D8] rounded-full hover:bg-[#F2ECE0] text-[#3D3731] transition-colors"
-                    aria-label="Next Slide"
-                  >
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  {/* Floating Script Accent */}
+                  <div className="hero-floating-script animate-float">
+                    <p className="script-title">{activeSlide.scriptTop}</p>
+                    <span className="script-sub-uppercase">{activeSlide.scriptBottom}</span>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Right Hero Visual with Script Callout */}
-            <div className="lg:col-span-7 relative h-[420px] sm:h-[500px] lg:h-[560px] w-full rounded-sm overflow-hidden shadow-sm">
+          {/* MOBILE LAYOUT (< 992px) */}
+          <div className="d-block d-lg-none pb-4">
+            {/* Mobile Visual Banner (Properly Framed with Full Headroom) */}
+            <div className="hero-mobile-image-wrapper mb-4">
               <Image
-                src={currentSlide.image}
-                alt="IRA Lifestyle Editorial Collection"
+                src={activeSlide.imageMobile}
+                alt={`${activeSlide.title} - IRA Lifestyle`}
                 fill
                 priority
-                className="object-cover object-center transition-all duration-700"
+                sizes="100vw"
+                style={{ 
+                  objectFit: 'cover', 
+                  objectPosition: activeSlide.objectPositionMobile || 'center 8%' 
+                }}
               />
 
-              {/* Delicate Warm Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent pointer-events-none" />
-
-              {/* Script Callout Overlay */}
-              <div className="absolute top-8 right-8 text-right z-10 pointer-events-none drop-shadow-md">
-                <span
-                  style={{ fontFamily: 'var(--font-script)' }}
-                  className="text-3xl sm:text-4xl lg:text-5xl text-white font-normal tracking-wide block"
-                >
-                  {currentSlide.script}
-                </span>
+              {/* Floating Script Accent on Mobile */}
+              <div className="hero-floating-script" style={{ top: '16px', right: '18px' }}>
+                <p className="script-title fs-3">{activeSlide.scriptTop}</p>
+                <span className="script-sub-uppercase">{activeSlide.scriptBottom}</span>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* 2. CATEGORY SECTION */}
-      <section className="w-full py-16 md:py-20 bg-[#FAF7F2] relative">
-        {/* Subtle Decorative Floral Line-art SVGs */}
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 opacity-25 pointer-events-none hidden xl:block">
-          <svg width="60" height="120" viewBox="0 0 60 120" fill="none">
-            <path
-              d="M30 10C30 40 10 50 10 70C10 90 30 100 30 110M30 35C45 35 50 45 45 55C40 65 30 55 30 55M30 75C15 75 10 85 15 95C20 105 30 95 30 95"
-              stroke="#B68D56"
-              strokeWidth="1.2"
-            />
-          </svg>
-        </div>
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-25 pointer-events-none hidden xl:block">
-          <svg width="60" height="120" viewBox="0 0 60 120" fill="none">
-            <path
-              d="M30 10C30 40 50 50 50 70C50 90 30 100 30 110M30 35C15 35 10 45 15 55C20 65 30 55 30 55M30 75C45 75 50 85 45 95C40 105 30 95 30 95"
-              stroke="#B68D56"
-              strokeWidth="1.2"
-            />
-          </svg>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 md:px-12 text-center">
-          <div className="flex items-center justify-center space-x-3 mb-2">
-            <span className="w-6 h-[1px] bg-[#B68D56]" />
-            <span className="text-[11px] tracking-[0.25em] font-semibold text-[#8F867C] uppercase">
-              SHOP BY CATEGORY
-            </span>
-            <span className="w-6 h-[1px] bg-[#B68D56]" />
-          </div>
-
-          <h2
-            style={{ fontFamily: 'var(--font-serif)' }}
-            className="text-3xl sm:text-4xl font-normal text-[#231F1C] mb-12 tracking-tight"
-          >
-            Find Your Style
-          </h2>
-
-          {/* Arched Category Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-5 sm:gap-6">
-            {categories.map((cat) => (
-              <Link
-                key={cat.name}
-                href={`/shop?category=${encodeURIComponent(cat.name)}`}
-                className="group flex flex-col items-center"
-              >
-                {/* Arched Container */}
-                <div className="w-full aspect-[3/4.2] rounded-t-[100px] overflow-hidden bg-[#EDE5D8] relative shadow-sm border border-[#EDE5D8] transition-all duration-500 group-hover:shadow-md group-hover:border-[#B68D56]/50">
-                  <Image
-                    src={cat.image}
-                    alt={cat.name}
-                    fill
-                    sizes="(max-width: 640px) 50vw, 20vw"
-                    className="object-cover transition-transform duration-700 ease-out group-hover:scale-108"
-                  />
-                  <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors duration-300" />
-                </div>
-
-                <div className="mt-4 flex items-center space-x-1 text-xs tracking-[0.16em] uppercase font-semibold text-[#2E2824] group-hover:text-[#B68D56] transition-colors">
-                  <span>{cat.name}</span>
-                  <span className="transition-transform duration-300 group-hover:translate-x-1">&rarr;</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 3. FEATURED COLLECTION SECTION */}
-      <section className="w-full py-16 md:py-20 bg-[#F7F2EB] border-t border-b border-[#EDE5D8]">
-        <div className="max-w-7xl mx-auto px-4 md:px-12">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Left Promotional Block */}
-            <div className="lg:col-span-3 flex flex-col justify-between self-stretch pr-4">
-              <div>
-                <span className="text-[10px] tracking-[0.25em] font-semibold text-[#8F867C] uppercase block mb-3">
-                  FEATURED COLLECTION
+            {/* Mobile Content */}
+            <div className="text-center px-2">
+              <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
+                <span className="text-uppercase fw-semibold" style={{ fontSize: '0.75rem', letterSpacing: '0.2em', color: 'var(--gold-primary)' }}>
+                  {activeSlide.tag}
                 </span>
-                <h3
-                  style={{ fontFamily: 'var(--font-serif)' }}
-                  className="text-3xl sm:text-4xl text-[#231F1C] font-normal leading-snug mb-4"
-                >
-                  Designer Ethnic Wear
-                </h3>
-                <p className="text-xs sm:text-sm text-[#6F665C] leading-relaxed mb-6 font-light">
-                  Elegant pieces for your most special moments. Tradition meets modern grace.
-                </p>
-                <Link
-                  href="/shop"
-                  className="gold-btn px-6 py-3 text-[11px] tracking-widest rounded-xs inline-flex items-center space-x-2"
-                >
-                  <span>SHOP NOW</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+
+              <h1 className="font-serif display-5 fw-normal text-dark mb-2 lh-sm">
+                {activeSlide.title} <br />
+                <span className="fst-italic" style={{ color: 'var(--gold-primary)' }}>{activeSlide.subtitle}</span>
+              </h1>
+
+              <p className="text-muted mb-4 small" style={{ lineHeight: '1.6' }}>
+                {activeSlide.desc}
+              </p>
+
+              <div className="d-flex justify-content-center gap-3 mb-4">
+                <Link href={activeSlide.link} className="btn-ira-gold w-100 py-3" style={{ maxWidth: '320px' }}>
+                  {activeSlide.btnText} <ArrowRight size={16} />
                 </Link>
               </div>
 
-              {/* Decorative Subtle Branch Watermark */}
-              <div className="mt-12 hidden lg:block opacity-20">
-                <svg width="90" height="110" viewBox="0 0 90 110" fill="none">
-                  <path
-                    d="M10 100C40 90 60 70 70 20M35 85C45 75 55 80 50 90M55 55C65 45 75 50 70 60"
-                    stroke="#B68D56"
-                    strokeWidth="1.5"
-                  />
-                </svg>
+              {/* Mobile Slide Navigation */}
+              <div className="d-flex align-items-center justify-content-center gap-3 text-muted" style={{ fontSize: '0.8rem', letterSpacing: '0.12em' }}>
+                <span className="fw-semibold text-dark">0{activeSlide.id} / 0{HERO_SLIDES.length}</span>
+                <span className="text-muted" style={{ width: '30px', height: '1px', backgroundColor: '#D8D1C5' }}></span>
+                <div className="d-flex gap-2">
+                  <button 
+                    onClick={handlePrevSlide}
+                    className="btn btn-sm btn-outline-secondary rounded-circle p-1 d-flex align-items-center justify-content-center"
+                    style={{ width: '28px', height: '28px' }}
+                    aria-label="Previous slide"
+                  >
+                    <ArrowLeft size={13} />
+                  </button>
+                  <button 
+                    onClick={handleNextSlide}
+                    className="btn btn-sm btn-outline-secondary rounded-circle p-1 d-flex align-items-center justify-content-center"
+                    style={{ width: '28px', height: '28px' }}
+                    aria-label="Next slide"
+                  >
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile Animated Trust Snap-Scroll Carousel (Sequential Staggered Scroll Animation) */}
+              <div ref={trustSectionRef} className="hero-trust-carousel-mobile">
+                <div 
+                  ref={trustScrollRef}
+                  onScroll={handleTrustScroll}
+                  className="hero-trust-scroll-track"
+                >
+                  {TRUST_BADGES.map((badge, idx) => {
+                    const Icon = badge.icon;
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`hero-trust-card-snap ${trustRevealed ? 'is-revealed' : ''} ${activeTrustIndex === idx ? 'active' : ''}`}
+                        style={{ transitionDelay: `${idx * 0.12}s` }}
+                        onClick={() => scrollToTrustBadge(idx)}
+                      >
+                        <div className="trust-icon-box">
+                          <Icon size={20} />
+                        </div>
+                        <div>
+                          <p className="trust-title">{badge.title}</p>
+                          <p className="trust-desc">{badge.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Dots indicator for current badge */}
+                <div className="hero-trust-dots">
+                  {TRUST_BADGES.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => scrollToTrustBadge(idx)}
+                      className={`hero-trust-dot ${activeTrustIndex === idx ? 'active' : ''}`}
+                      aria-label={`Go to badge ${idx + 1}`}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Right Product Grid */}
-            <div className="lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              {initialProducts.slice(0, 5).map((product) => (
-                <div
-                  key={product.id}
-                  className="group bg-[#FAF7F2] rounded-xs border border-[#EDE5D8] overflow-hidden flex flex-col justify-between transition-all duration-300 hover:shadow-lg hover:border-[#D8C6AB]"
-                >
-                  {/* Image Container with Wishlist */}
-                  <div className="relative aspect-[3/4] bg-[#EDE5D8] overflow-hidden">
-                    <Link href={`/product/${product.id}`} className="relative block w-full h-full">
-                      <Image
-                        src={product.image}
-                        alt={product.name}
-                        fill
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                        className="object-cover transition-transform duration-700 ease-out group-hover:scale-106"
-                      />
-                    </Link>
-
-                    {/* Wishlist Button */}
-                    <button
-                      onClick={() => toggleWishlist(product)}
-                      className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-white/80 backdrop-blur-xs flex items-center justify-center text-[#231F1C] hover:text-[#B68D56] transition-all hover:scale-110 shadow-xs"
-                      aria-label="Save to Wishlist"
-                    >
-                      <Heart
-                        className={`w-4 h-4 ${
-                          isInWishlist(product.id)
-                            ? 'text-[#B68D56] fill-[#B68D56]'
-                            : 'stroke-[1.5]'
-                        }`}
-                      />
-                    </button>
-
-                    {/* Quick Add Overlay on hover */}
-                    <button
-                      onClick={() => handleQuickAdd(product)}
-                      className="absolute bottom-0 inset-x-0 bg-[#231F1C]/90 text-white text-[10px] tracking-widest uppercase py-2.5 flex items-center justify-center space-x-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                    >
-                      <ShoppingBag className="w-3.5 h-3.5 text-[#B68D56]" />
-                      <span>Add to Bag</span>
-                    </button>
-                  </div>
-
-                  {/* Product Details */}
-                  <div className="p-3">
-                    <Link
-                      href={`/product/${product.id}`}
-                      className="text-xs font-medium text-[#2E2824] hover:text-[#B68D56] transition-colors line-clamp-1 block"
-                    >
-                      {product.name}
-                    </Link>
-
-                    <div className="flex items-center space-x-1.5 mt-1.5">
-                      <span className="text-xs font-semibold text-[#231F1C]">
-                        ₹ {product.price.toLocaleString('en-IN')}
-                      </span>
-                      {product.originalPrice && (
-                        <span className="text-[10px] text-[#A69C90] line-through">
-                          ₹ {product.originalPrice.toLocaleString('en-IN')}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Rating Stars */}
-                    <div className="flex items-center space-x-1 mt-2 text-[10px] text-[#8F867C]">
-                      <div className="flex text-[#B68D56]">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-2.5 h-2.5 ${
-                              i < Math.floor(product.rating)
-                                ? 'fill-[#B68D56]'
-                                : 'text-[#DCD2C4]'
-                            }`}
-                          />
-                        ))}
+        {/* DESKTOP TRUST BADGES STRIP (Bottom of Hero) */}
+        <div className="hero-trust-bar-desktop d-none d-lg-block">
+          <div className="container">
+            <div className="row g-0 justify-content-between">
+              {TRUST_BADGES.map((badge, idx) => {
+                const Icon = badge.icon;
+                return (
+                  <div 
+                    key={idx} 
+                    className={`col-3 ${idx < TRUST_BADGES.length - 1 ? 'border-end' : ''}`}
+                    style={{ borderColor: '#EAE3D6' }}
+                  >
+                    <div className="hero-trust-item justify-content-center">
+                      <div className="hero-trust-icon-box">
+                        <Icon size={18} />
                       </div>
-                      <span className="font-mono text-[9px]">({product.rating})</span>
+                      <div>
+                        <h6 className="mb-0 fw-bold" style={{ fontSize: '0.78rem', letterSpacing: '0.08em', color: 'var(--text-dark)' }}>
+                          {badge.title}
+                        </h6>
+                        <small className="text-muted" style={{ fontSize: '0.72rem' }}>
+                          {badge.desc}
+                        </small>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
       </section>
+
+      {/* 2. SHOP BY CATEGORY (DESKTOP: 5 ARCH CARDS ROW | MOBILE: 3D FASHION RUNWAY) */}
+      <CategoryShowcase />
+
+      {/* 3. FEATURED COLLECTION SECTION (DESIGNER ETHNIC WEAR SCROLLING & LUXURY DESIGN) */}
+      <FeaturedCollection 
+        products={products.length > 0 ? products : INITIAL_PRODUCTS} 
+        onQuickView={setQuickViewProduct} 
+      />
 
       {/* 4. OUR STORY SECTION */}
-      <section className="w-full py-16 md:py-24 bg-[#FAF7F2]">
-        <div className="max-w-7xl mx-auto px-4 md:px-12">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 items-center">
-            {/* Left: Model with Jasmine In Hair */}
-            <div className="md:col-span-4 relative aspect-[4/5] rounded-xs overflow-hidden shadow-sm bg-[#EDE5D8]">
-              <Image
-                src="/images/story-model.jpg"
-                alt="IRA Lifestyle Heritage Craftsmanship"
-                fill
-                sizes="(max-width: 768px) 100vw, 33vw"
-                className="object-cover"
-              />
+      <section className="py-5" style={{ backgroundColor: '#FDFBF7' }}>
+        <div className="container">
+          <div className="row align-items-center gy-4">
+            {/* Story Model Portrait */}
+            <div className="col-12 col-md-4">
+              <div 
+                className="position-relative overflow-hidden rounded shadow"
+                style={{
+                  aspectRatio: '4 / 3.3',
+                  backgroundColor: '#F3EFE8',
+                  border: '1px solid rgba(212, 185, 142, 0.45)'
+                }}
+              >
+                <Image
+                  src="/images/story_portrait.jpg"
+                  alt="IRA Lifestyle Heritage"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  style={{ objectFit: 'cover', objectPosition: 'center 15%' }}
+                />
+              </div>
             </div>
 
-            {/* Middle: Brand Story Copy */}
-            <div className="md:col-span-5 flex flex-col justify-center">
-              <span className="text-[10px] tracking-[0.28em] font-semibold text-[#8F867C] uppercase mb-3">
-                OUR STORY
+            {/* Story Center Text */}
+            <div className="col-12 col-md-5 px-lg-4">
+              <span className="text-uppercase fw-semibold d-block mb-1" style={{ fontSize: '0.72rem', letterSpacing: '0.22em', color: 'var(--gold-primary)' }}>
+                &mdash; OUR STORY
               </span>
-              <h2
-                style={{ fontFamily: 'var(--font-serif)' }}
-                className="text-3xl sm:text-4xl text-[#231F1C] font-normal leading-snug mb-5"
-              >
+              <h2 className="font-serif fs-2 fw-normal text-dark mb-3">
                 More Than Just Clothing
               </h2>
-              <p className="text-sm text-[#686057] leading-relaxed font-light mb-6">
-                At IRA Lifestyle, we believe in the power of fashion to express your true self. Our
-                collections are crafted with elegance, comfort and a touch of modern charm —
+              <p className="text-muted" style={{ fontSize: '0.88rem', lineHeight: '1.75' }}>
+                At IRA Lifestyle, we believe in the power of fashion to express your true self. 
+                Our collections are crafted with elegance, comfort and a touch of modern charm &mdash; 
                 because you deserve to feel beautiful, always.
               </p>
-              <div>
-                <Link
-                  href="/about"
-                  className="gold-btn px-6 py-3 text-xs tracking-widest rounded-xs inline-flex items-center space-x-2"
-                >
-                  <span>KNOW MORE</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+              <div className="mt-4">
+                <Link href="/about" className="btn-ira-gold">
+                  KNOW MORE <ArrowRight size={14} />
                 </Link>
               </div>
             </div>
 
-            {/* Right: 4 Luxury Service Badges */}
-            <div className="md:col-span-3 flex flex-col space-y-6 pt-4 md:pt-0 border-t md:border-t-0 md:border-l border-[#EDE5D8] md:pl-8">
-              <div className="flex items-start space-x-3.5">
-                <div className="p-2 rounded-xs bg-[#F2ECE0] text-[#B68D56] flex-shrink-0">
-                  <Gem className="w-5 h-5 stroke-[1.6]" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-[#231F1C] tracking-wide">
-                    Premium Quality Fabrics
-                  </h4>
-                  <p className="text-[11px] text-[#8F867C] mt-0.5 font-light">
-                    Pure hand-picked silks, linens &amp; georgettes
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3.5">
-                <div className="p-2 rounded-xs bg-[#F2ECE0] text-[#B68D56] flex-shrink-0">
-                  <ShieldCheck className="w-5 h-5 stroke-[1.6]" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-[#231F1C] tracking-wide">
-                    Secure Payments &amp; Easy Returns
-                  </h4>
-                  <p className="text-[11px] text-[#8F867C] mt-0.5 font-light">
-                    Safe checkout &amp; hassle-free 7-day returns
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3.5">
-                <div className="p-2 rounded-xs bg-[#F2ECE0] text-[#B68D56] flex-shrink-0">
-                  <Truck className="w-5 h-5 stroke-[1.6]" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-[#231F1C] tracking-wide">
-                    Fast &amp; Reliable Delivery
-                  </h4>
-                  <p className="text-[11px] text-[#8F867C] mt-0.5 font-light">
-                    Complimentary express dispatch across India
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3.5">
-                <div className="p-2 rounded-xs bg-[#F2ECE0] text-[#B68D56] flex-shrink-0">
-                  <Headphones className="w-5 h-5 stroke-[1.6]" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold text-[#231F1C] tracking-wide">
-                    Customer Support Always Here
-                  </h4>
-                  <p className="text-[11px] text-[#8F867C] mt-0.5 font-light">
-                    Personal styling &amp; order assistance via WhatsApp
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. QUOTE & NEWSLETTER SECTION */}
-      <section className="w-full bg-[#FAF7F2] border-t border-[#EDE5D8]">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 min-h-[300px]">
-          {/* Left Quote with Silk Fabric Background */}
-          <div className="lg:col-span-6 relative flex items-center justify-center p-8 sm:p-12 overflow-hidden bg-[#EDE5D8]">
-            <Image
-              src="/images/quote-bg.jpg"
-              alt="IRA Silk Texture"
-              fill
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              className="object-cover"
-            />
-            <div className="absolute inset-0 bg-[#F4EFE6]/70 backdrop-blur-[1px]" />
-
-            <div className="relative z-10 text-center max-w-md px-4">
-              <blockquote
-                style={{ fontFamily: 'var(--font-serif)' }}
-                className="text-2xl sm:text-3xl text-[#231F1C] italic font-normal leading-relaxed mb-3"
+            {/* Story Value Propositions with Sequential Scroll-In Animation */}
+            <div className="col-12 col-md-3">
+              <div 
+                ref={storyPropsRef}
+                className={`story-props-container ${storyPropsRevealed ? 'is-revealed' : ''} ps-lg-3`}
               >
-                &ldquo;Style is a way of saying who you are without speaking.&rdquo;
-              </blockquote>
-              <span className="text-xs tracking-[0.3em] font-medium text-[#B68D56] uppercase">
-                — IRA
-              </span>
-            </div>
-          </div>
-
-          {/* Right Newsletter Form */}
-          <div className="lg:col-span-6 flex flex-col justify-center p-8 sm:p-12 bg-[#F9F5EE]">
-            <span className="text-[10px] tracking-[0.28em] font-semibold text-[#8F867C] uppercase mb-2">
-              JOIN OUR STYLE JOURNEY
-            </span>
-            <h3
-              style={{ fontFamily: 'var(--font-serif)' }}
-              className="text-3xl text-[#231F1C] font-normal mb-2"
-            >
-              Get Exclusive Updates
-            </h3>
-            <p className="text-xs text-[#6F665C] mb-6 font-light max-w-sm">
-              Be the first to know about new arrivals, special offers and style tips.
-            </p>
-
-            {subscribed ? (
-              <div className="p-4 bg-[#EAF2EC] text-[#2F5A35] rounded-xs text-xs flex items-center space-x-2">
-                <Check className="w-4 h-4 text-[#3F6A44]" />
-                <span>Thank you! You are now subscribed to IRA exclusive updates.</span>
+                {STORY_PROPOSITIONS.map((prop, idx) => {
+                  const Icon = prop.icon;
+                  return (
+                    <div 
+                      key={idx} 
+                      className="story-prop-card"
+                      style={{ transitionDelay: `${idx * 0.12}s` }}
+                    >
+                      <div className="story-prop-icon-box">
+                        <Icon size={20} />
+                      </div>
+                      <div>
+                        <h6 className="story-prop-title">{prop.title}</h6>
+                        <small className="story-prop-desc">{prop.desc}</small>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            ) : (
-              <form onSubmit={handleSubscribe} className="flex flex-col sm:flex-row gap-2 max-w-md">
-                <input
-                  type="email"
-                  required
-                  placeholder="Enter your email address"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 px-4 py-3 bg-white border border-[#EDE5D8] rounded-xs text-xs text-[#231F1C] placeholder-[#9E948A] focus:outline-none focus:border-[#B68D56]"
-                />
-                <button
-                  type="submit"
-                  disabled={subscribing}
-                  className="gold-btn px-6 py-3 text-xs tracking-widest rounded-xs uppercase flex items-center justify-center space-x-2 flex-shrink-0"
-                >
-                  <span>{subscribing ? 'SENDING...' : 'SUBSCRIBE'}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </form>
-            )}
+            </div>
           </div>
         </div>
       </section>
+
+      {/* 5. QUOTE BANNER & NEWSLETTER SECTION (PREMIUM ELEGANCE MATCHING MOCKUP) */}
+      <section className="quote-newsletter-luxury-section py-5 position-relative">
+        {/* Botanical Floral Corner Watermarks */}
+        <div className="botanical-corner botanical-corner-tl" aria-hidden="true">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+            <path d="M0 0 C40 10 70 35 85 70 C70 55 45 45 10 40 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.5" fill="none" />
+            <path d="M0 25 C25 35 45 55 55 85 C42 70 25 60 0 55 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.45" fill="none" />
+            <path d="M20 0 C35 25 55 45 85 55 C70 42 60 25 55 0 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.45" fill="none" />
+            <circle cx="45" cy="45" r="3" fill="#D4B98E" fillOpacity="0.4" />
+          </svg>
+        </div>
+
+        <div className="botanical-corner botanical-corner-bl" aria-hidden="true">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+            <path d="M0 120 C40 110 70 85 85 50 C70 65 45 75 10 80 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.5" fill="none" />
+            <path d="M0 95 C25 85 45 65 55 35 C42 50 25 60 0 65 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.45" fill="none" />
+            <path d="M20 120 C35 95 55 75 85 65 C70 78 60 95 55 120 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.45" fill="none" />
+          </svg>
+        </div>
+
+        <div className="botanical-corner botanical-corner-tr" aria-hidden="true">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+            <path d="M120 0 C80 10 50 35 35 70 C50 55 75 45 110 40 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.5" fill="none" />
+            <path d="M120 25 C95 35 75 55 65 85 C78 70 95 60 120 55 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.45" fill="none" />
+            <circle cx="75" cy="45" r="3" fill="#D4B98E" fillOpacity="0.4" />
+          </svg>
+        </div>
+
+        <div className="botanical-corner botanical-corner-br" aria-hidden="true">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+            <path d="M120 120 C80 110 50 85 35 50 C50 65 75 75 110 80 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.5" fill="none" />
+            <path d="M120 95 C95 85 75 65 65 35 C78 50 95 60 120 65 Z" stroke="#D4B98E" strokeWidth="1" strokeOpacity="0.45" fill="none" />
+          </svg>
+        </div>
+
+        <div className="container position-relative z-2 py-4">
+          <div className="row align-items-center gy-5">
+            {/* Left: Silk Quote */}
+            <div className="col-12 col-md-5 pe-md-4 text-center text-md-start">
+              <blockquote className="font-editorial fst-italic display-6 text-dark mb-3 lh-sm" style={{ letterSpacing: '-0.01em' }}>
+                <span className="quote-mark-gold me-1">&ldquo;</span>
+                Style is a way of saying who you are without speaking.
+                <span className="quote-mark-gold ms-1">&bdquo;</span>
+              </blockquote>
+              <div className="d-flex align-items-center justify-content-center justify-content-md-start gap-2">
+                <span style={{ width: '32px', height: '1px', backgroundColor: 'var(--gold-primary)' }}></span>
+                <span className="text-uppercase fw-semibold" style={{ fontSize: '0.78rem', letterSpacing: '0.24em', color: 'var(--gold-primary)' }}>
+                  IRA
+                </span>
+              </div>
+            </div>
+
+            {/* Middle Vertical Divider with Star Ornament */}
+            <div className="col-12 col-md-1 d-none d-md-flex justify-content-center p-0">
+              <div className="d-flex flex-column align-items-center" style={{ height: '160px' }}>
+                <div style={{ width: '1px', flex: 1, background: 'linear-gradient(180deg, transparent, #D4B98E)' }}></div>
+                <div style={{ color: 'var(--gold-primary)', padding: '8px 0', fontSize: '1.1rem', lineHeight: 1 }}>✦</div>
+                <div style={{ width: '1px', flex: 1, background: 'linear-gradient(180deg, #D4B98E, transparent)' }}></div>
+              </div>
+            </div>
+
+            {/* Right: Newsletter Signup */}
+            <div className="col-12 col-md-6 ps-md-4">
+              <div className="text-center text-md-start">
+                <div className="d-flex align-items-center justify-content-center justify-content-md-start gap-2 mb-2">
+                  <span style={{ width: '28px', height: '1px', backgroundColor: 'var(--gold-primary)' }}></span>
+                  <span className="text-uppercase fw-semibold" style={{ fontSize: '0.74rem', letterSpacing: '0.22em', color: 'var(--gold-primary)' }}>
+                    JOIN OUR STYLE JOURNEY
+                  </span>
+                  <span style={{ width: '28px', height: '1px', backgroundColor: 'var(--gold-primary)' }}></span>
+                </div>
+
+                <h3 className="font-serif display-6 fw-normal text-dark mb-2">
+                  Get Exclusive Updates
+                </h3>
+
+                <p className="text-muted small mb-4" style={{ lineHeight: '1.6', fontSize: '0.9rem' }}>
+                  Be the first to know about new arrivals, special offers and style tips.
+                </p>
+
+                <form onSubmit={handleNewsletter} className="newsletter-unified-bar mx-auto mx-md-0">
+                  <div className="d-flex align-items-center flex-grow-1 px-3 py-1">
+                    <Mail size={17} style={{ color: 'var(--gold-primary)' }} className="me-2 flex-shrink-0" />
+                    <input
+                      type="email"
+                      required
+                      placeholder="Your email address"
+                      value={newsletterEmail}
+                      onChange={(e) => setNewsletterEmail(e.target.value)}
+                      className="form-control border-0 bg-transparent shadow-none p-0"
+                      style={{ fontSize: '0.88rem', color: '#221F1E' }}
+                    />
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={newsletterStatus === 'loading'}
+                    className="btn-newsletter-subscribe"
+                  >
+                    <span>{newsletterStatus === 'loading' ? 'SUBMITTING...' : 'SUBSCRIBE'}</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </form>
+
+                {newsletterStatus === 'success' && (
+                  <div className="d-flex align-items-center gap-1 text-success mt-2 small justify-content-center justify-content-md-start">
+                    <CheckCircle2 size={16} />
+                    <span>Welcome to the IRA family! Check your inbox for your welcome gift.</span>
+                  </div>
+                )}
+                {newsletterStatus === 'error' && (
+                  <p className="text-danger mt-2 small text-center text-md-start">Could not subscribe. Please try again.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Quick View Modal */}
+      <QuickViewModal product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
     </div>
   );
 }

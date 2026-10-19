@@ -4,7 +4,7 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 interface MongooseCache {
   conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
+  promise: Promise<typeof mongoose | null> | null;
 }
 
 declare global {
@@ -12,15 +12,15 @@ declare global {
   var mongooseCache: MongooseCache | undefined;
 }
 
-const cached: MongooseCache = global.mongooseCache || { conn: null, promise: null };
+let cached: MongooseCache = global.mongooseCache || { conn: null, promise: null };
 
-if (!global.mongooseCache) {
-  global.mongooseCache = cached;
+if (!cached) {
+  cached = global.mongooseCache = { conn: null, promise: null };
 }
 
 export async function connectToDatabase(): Promise<typeof mongoose | null> {
   if (!MONGODB_URI) {
-    // If MONGODB_URI is not set, log gracefully and return null (triggers fallback)
+    console.warn('⚠️ MONGODB_URI is not set. Operating in resilient in-memory mode.');
     return null;
   }
 
@@ -31,11 +31,16 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 3000,
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
+      console.log('✨ Successfully connected to MongoDB for IRA Lifestyle');
       return mongooseInstance;
+    }).catch((err) => {
+      console.warn('⚠️ MongoDB connection attempt failed. Falling back to local store:', err.message);
+      cached.promise = null;
+      return null;
     });
   }
 
@@ -43,7 +48,6 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
     cached.conn = await cached.promise;
   } catch (e) {
     cached.promise = null;
-    console.error('Failed to connect to MongoDB:', e);
     return null;
   }
 

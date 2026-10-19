@@ -1,13 +1,36 @@
 import { MetadataRoute } from 'next';
 
 export default function robots(): MetadataRoute.Robots {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://iralifestyle.com';
+  const baseUrl = 'https://iralifestyle.com';
+
+  const aiAndSearchBots = [
+    '*',
+    'GPTBot',
+    'ChatGPT-User',
+    'ClaudeBot',
+    'Claude-Web',
+    'Google-Extended',
+    'Googlebot',
+    'Googlebot-Image',
+    'PerplexityBot',
+    'Applebot',
+    'Applebot-Extended',
+    'Meta-ExternalAgent',
+    'Bingbot',
+    'cohere-ai',
+    'Bytespider',
+    'Diffbot',
+    'DuckDuckBot',
+    'CCBot',
+  ];
+
   return {
-    rules: {
-      userAgent: '*',
+    rules: aiAndSearchBots.map((bot) => ({
+      userAgent: bot,
       allow: '/',
-      disallow: ['/admin/', '/api/'],
-    },
+      disallow: ['/admin/', '/api/admin/'],
+    })),
     sitemap: `${baseUrl}/sitemap.xml`,
+    host: baseUrl,
   };
 }

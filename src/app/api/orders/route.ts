@@ -1,98 +1,54 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { OrderModel } from '@/models/Order';
-
-// In-memory fallback orders
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const memoryOrders: any[] = [
-  {
-    id: 'ORD-7821',
-    customerName: 'Ananya Sharma',
-    email: 'ananya.s@example.com',
-    phone: '+91 98765 43210',
-    address: '42, Defence Colony',
-    city: 'New Delhi',
-    state: 'Delhi',
-    pincode: '110024',
-    items: [
-      {
-        productId: 'ira-001',
-        name: 'Floral Anarkali Dress',
-        price: 2999,
-        size: 'M',
-        quantity: 1,
-        image: '/images/prod-sage-anarkali.jpg',
-      },
-    ],
-    totalAmount: 2999,
-    paymentMethod: 'upi',
-    status: 'confirmed',
-    createdAt: new Date().toISOString(),
-  },
-];
+import { NextResponse } from 'next/server';
+import { getOrders, createOrder, updateOrderStatus, deleteOrder } from '@/lib/dbStore';
 
 export async function GET() {
   try {
-    const db = await connectToDatabase();
-    if (db) {
-      const orders = await OrderModel.find().sort({ createdAt: -1 }).lean();
-      return NextResponse.json({
-        success: true,
-        source: 'mongodb',
-        orders: orders.map((o) => ({ ...o, id: o._id?.toString() })),
-      });
-    }
-
-    return NextResponse.json({
-      success: true,
-      source: 'memory',
-      orders: memoryOrders,
-    });
+    const orders = await getOrders();
+    return NextResponse.json({ success: true, count: orders.length, orders });
   } catch (error) {
-    console.error('Orders GET Error:', error);
-    return NextResponse.json({ success: false, orders: memoryOrders }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { customerName, email, phone, address, city, state, pincode, items, totalAmount, paymentMethod } = body;
-
-    if (!customerName || !email || !phone || !address || !items || items.length === 0) {
-      return NextResponse.json({ success: false, error: 'Missing order details' }, { status: 400 });
+    if (!body.items || !body.items.length) {
+      return NextResponse.json({ success: false, message: 'Cart items are required' }, { status: 400 });
     }
-
-    const newOrder = {
-      id: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-      customerName,
-      email,
-      phone,
-      address,
-      city,
-      state,
-      pincode,
-      items,
-      totalAmount: Number(totalAmount),
-      paymentMethod: paymentMethod || 'cod',
-      status: 'confirmed' as const,
-      createdAt: new Date().toISOString(),
-    };
-
-    const db = await connectToDatabase();
-    if (db) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const created: any = await OrderModel.create(newOrder);
-      return NextResponse.json({
-        success: true,
-        order: { ...created.toObject(), id: created._id.toString() },
-      });
-    }
-
-    memoryOrders.unshift(newOrder);
-    return NextResponse.json({ success: true, order: newOrder });
+    const order = await createOrder(body);
+    return NextResponse.json({ success: true, order }, { status: 201 });
   } catch (error) {
-    console.error('Orders POST Error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to process order' }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const { orderId, orderStatus, paymentStatus } = await request.json();
+    if (!orderId || !orderStatus) {
+      return NextResponse.json({ success: false, message: 'orderId and orderStatus are required' }, { status: 400 });
+    }
+    const updated = await updateOrderStatus(orderId, orderStatus, paymentStatus);
+    if (!updated) {
+      return NextResponse.json({ success: false, message: 'Order not found' }, { status: 404 });
+    }
+    return NextResponse.json({ success: true, order: updated });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const orderId = searchParams.get('orderId');
+    if (!orderId) {
+      return NextResponse.json({ success: false, message: 'orderId is required' }, { status: 400 });
+    }
+    const success = await deleteOrder(orderId);
+    return NextResponse.json({ success });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }

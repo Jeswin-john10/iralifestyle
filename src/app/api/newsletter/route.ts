@@ -1,36 +1,38 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { SubscriberModel } from '@/models/Subscriber';
+import { NextResponse } from 'next/server';
+import { addNewsletterSubscriber, getNewsletterSubscribers, deleteNewsletterSubscriber } from '@/lib/dbStore';
 
-const memorySubscribers: string[] = [];
+export async function GET() {
+  try {
+    const subscribers = await getNewsletterSubscribers();
+    return NextResponse.json({ success: true, count: subscribers.length, subscribers });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+  }
+}
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const { email } = await request.json();
-
     if (!email || !email.includes('@')) {
-      return NextResponse.json({ success: false, error: 'Valid email required' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Valid email is required' }, { status: 400 });
     }
-
-    const db = await connectToDatabase();
-    if (db) {
-      await SubscriberModel.updateOne(
-        { email: email.toLowerCase() },
-        { email: email.toLowerCase(), source: 'homepage' },
-        { upsert: true }
-      );
-    } else {
-      if (!memorySubscribers.includes(email.toLowerCase())) {
-        memorySubscribers.push(email.toLowerCase());
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Thank you for joining the IRA Lifestyle family!',
-    });
+    await addNewsletterSubscriber(email);
+    return NextResponse.json({ success: true, message: 'Thank you for subscribing to IRA Lifestyle!' });
   } catch (error) {
-    console.error('Newsletter error:', error);
-    return NextResponse.json({ success: false, error: 'Subscription failed' }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const email = searchParams.get('email');
+    if (!email) {
+      return NextResponse.json({ success: false, message: 'Email is required' }, { status: 400 });
+    }
+    const success = await deleteNewsletterSubscriber(email);
+    return NextResponse.json({ success });
+  } catch (error) {
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }

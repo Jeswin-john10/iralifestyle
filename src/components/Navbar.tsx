@@ -4,57 +4,63 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import {
-  Search,
-  User,
-  Heart,
-  ShoppingBag,
-  Menu,
-  X,
-  ChevronDown,
+import { useCart } from '@/context/CartContext';
+import { useAuth } from '@/context/AuthContext';
+import { 
+  Search, 
+  User, 
+  Heart, 
+  ShoppingBag, 
+  Menu, 
+  X, 
+  ChevronDown 
 } from 'lucide-react';
-import { InstagramIcon, FacebookIcon, YoutubeIcon } from '@/components/SocialIcons';
-import { useCart } from '@/context/CartWishlistContext';
+import { InstagramIcon, FacebookIcon, YoutubeIcon } from './SocialIcons';
+import SearchModal from './SearchModal';
 
 export default function Navbar() {
-  const pathname = usePathname();
-  const { cartCount, wishlistCount, setIsCartOpen, setIsWishlistOpen, setIsSearchOpen } = useCart();
-  const [isScrolled, setIsScrolled] = useState(false);
+  const pathname = usePathname() || '/';
+
+  // Do not render storefront navbar inside the admin portal
+  if (pathname.startsWith('/admin')) {
+    return null;
+  }
+
+  const { cartCount, wishlist, setIsCartOpen } = useCart();
+  const { user, openAuthModal, openProfileDrawer } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [shopDropdownOpen, setShopDropdownOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [shopDropdown, setShopDropdown] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 20) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
+      setIsScrolled(window.scrollY > 30);
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Close mobile menu on route change
+  // Close mobile menu on page change
   useEffect(() => {
     setMobileMenuOpen(false);
-    setShopDropdownOpen(false);
+    setShopDropdown(false);
   }, [pathname]);
 
   const navLinks = [
     { label: 'HOME', href: '/' },
-    {
-      label: 'SHOP',
+    { 
+      label: 'SHOP', 
       href: '/shop',
       hasDropdown: true,
-      dropdownItems: [
-        { name: 'All Collections', href: '/shop' },
-        { name: 'Dresses', href: '/shop?category=Dresses' },
-        { name: 'Kurtis', href: '/shop?category=Kurtis' },
-        { name: 'Sarees', href: '/shop?category=Sarees' },
-        { name: 'Co-ord Sets', href: '/shop?category=Co-ord Sets' },
-        { name: 'New Arrivals', href: '/shop?category=New Arrivals' },
-      ],
+      subcategories: [
+        { label: 'All Ethnic Wear', href: '/shop' },
+        { label: 'Dresses & Gowns', href: '/shop/dresses' },
+        { label: 'Embroidered Kurtis', href: '/shop/kurtis' },
+        { label: 'Chiffon & Silk Sarees', href: '/shop/sarees' },
+        { label: 'Co-ord Sets', href: '/shop/co-ord-sets' },
+        { label: 'New Arrivals', href: '/shop/new-arrivals' },
+      ]
     },
     { label: 'COLLECTIONS', href: '/collections' },
     { label: 'ABOUT', href: '/about' },
@@ -62,228 +68,300 @@ export default function Navbar() {
   ];
 
   return (
-    <header className="w-full z-40 sticky top-0 transition-all duration-300">
+    <>
       {/* Top Announcement Bar */}
-      <div className="bg-[#FAF7F2] border-b border-[#EDE5D8] text-[11px] py-1.5 px-4 md:px-12 text-[#686057] flex justify-between items-center tracking-wider">
-        <div className="mx-auto md:mx-0 flex items-center space-x-2 font-medium">
-          <span>FREE SHIPPING ON ORDERS ABOVE ₹999</span>
-          <span className="opacity-40">|</span>
-          <span className="hidden sm:inline">ELEGANCE IN EVERY THREAD</span>
-        </div>
-
-        <div className="hidden md:flex items-center space-x-4">
-          <span className="text-[10px] tracking-widest text-[#8F867C]">Follow us</span>
-          <div className="flex items-center space-x-2.5 text-[#5A524A]">
-            <a
-              href="https://instagram.com"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-[#B68D56] transition-colors"
-              aria-label="Instagram"
-            >
-              <InstagramIcon className="w-3.5 h-3.5" />
-            </a>
-            <a
-              href="https://facebook.com"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-[#B68D56] transition-colors"
-              aria-label="Facebook"
-            >
-              <FacebookIcon className="w-3.5 h-3.5" />
-            </a>
-            <a
-              href="https://youtube.com"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-[#B68D56] transition-colors"
-              aria-label="YouTube"
-            >
-              <YoutubeIcon className="w-3.5 h-3.5" />
-            </a>
+      <div className="top-bar">
+        <div className="container d-flex justify-content-between align-items-center">
+          <div className="d-none d-md-block" style={{ width: '120px' }}></div>
+          <div className="text-center flex-grow-1 fw-medium">
+            FREE SHIPPING &nbsp;|&nbsp; ELEGANCE IN EVERY THREAD
+          </div>
+          <div className="d-flex align-items-center gap-3">
+            <span className="d-none d-lg-inline text-muted" style={{ fontSize: '0.68rem' }}>Follow us</span>
+            <div className="d-flex align-items-center gap-2">
+              <a href="https://instagram.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="Instagram">
+                <InstagramIcon size={13} />
+              </a>
+              <a href="https://facebook.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="Facebook">
+                <FacebookIcon size={13} />
+              </a>
+              <a href="https://youtube.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="YouTube">
+                <YoutubeIcon size={13} />
+              </a>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main Navigation Bar */}
-      <nav
-        className={`w-full px-4 md:px-12 py-3 transition-all duration-300 border-b ${
-          isScrolled
-            ? 'bg-[#FAF7F2]/95 backdrop-blur-md shadow-sm border-[#EDE5D8]'
-            : 'bg-[#FAF7F2] border-transparent'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Brand Logo & Name */}
-          <Link href="/" className="flex items-center space-x-3 group">
-            <div className="relative w-11 h-11 transition-transform duration-300 group-hover:scale-105">
-              <Image
-                src="/images/ira-logo.png"
-                alt="IRA Lifestyle Monogram"
-                fill
-                sizes="44px"
-                className="object-contain"
+      {/* Main Luxury Header */}
+      <header className={`luxury-navbar ${isScrolled ? 'shadow-sm py-2' : 'py-3'}`}>
+        <div className="container d-flex align-items-center justify-content-between">
+          {/* Mobile menu trigger */}
+          <button 
+            className="btn btn-link text-dark p-0 d-lg-none"
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open mobile menu"
+          >
+            <Menu size={24} />
+          </button>
+
+          {/* Brand Logo with Monogram */}
+          <Link href="/" className="brand-logo-container" aria-label="IRA Lifestyle Home">
+            <div className="brand-logo-mark">
+              <Image 
+                src="/logo.png" 
+                alt="IRA Lifestyle Monogram Logo" 
+                fill 
+                sizes="48px" 
+                style={{ objectFit: 'contain' }}
                 priority
               />
             </div>
-            <div className="flex flex-col">
-              <span
-                style={{ fontFamily: 'var(--font-serif)' }}
-                className="text-2xl md:text-[26px] font-semibold tracking-[0.2em] leading-none text-[#231F1C] uppercase"
-              >
-                IRA
-              </span>
-              <span className="text-[9px] tracking-[0.32em] text-[#8F867C] uppercase font-medium mt-0.5">
-                LIFESTYLE
-              </span>
+            <div className="brand-text-block">
+              <span className="brand-title fs-4">IRA</span>
+              <span className="brand-subtitle">LIFESTYLE</span>
             </div>
           </Link>
 
-          {/* Desktop Nav Links */}
-          <div className="hidden lg:flex items-center space-x-9 text-[13px] tracking-[0.14em] font-medium text-[#2E2925]">
-            {navLinks.map((link) =>
-              link.hasDropdown ? (
-                <div
-                  key={link.label}
-                  className="relative group py-2"
-                  onMouseEnter={() => setShopDropdownOpen(true)}
-                  onMouseLeave={() => setShopDropdownOpen(false)}
-                >
-                  <Link
-                    href={link.href}
-                    className={`flex items-center space-x-1 hover:text-[#B68D56] transition-colors ${
-                      pathname.startsWith('/shop') ? 'text-[#B68D56]' : ''
-                    }`}
+          {/* Desktop Navigation Links */}
+          <nav className="d-none d-lg-flex align-items-center gap-4">
+            {navLinks.map((link) => {
+              const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href);
+              
+              if (link.hasDropdown) {
+                return (
+                  <div 
+                    key={link.label}
+                    className="position-relative"
+                    onMouseEnter={() => setShopDropdown(true)}
+                    onMouseLeave={() => setShopDropdown(false)}
                   >
-                    <span>{link.label}</span>
-                    <ChevronDown className="w-3.5 h-3.5 transition-transform duration-200 group-hover:rotate-180 text-[#8F867C]" />
-                  </Link>
+                    <Link 
+                      href={link.href} 
+                      className={`nav-link-ira d-flex align-items-center gap-1 ${isActive ? 'active' : ''}`}
+                    >
+                      {link.label}
+                      <ChevronDown size={14} style={{ transition: 'transform 0.2s', transform: shopDropdown ? 'rotate(180deg)' : 'none' }} />
+                    </Link>
 
-                  {/* Dropdown Menu */}
-                  {shopDropdownOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-52 bg-[#FCFAF7] border border-[#EDE5D8] shadow-xl py-2 rounded-sm z-50 animate-fadeIn">
-                      {link.dropdownItems?.map((item) => (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className="block px-4 py-2.5 text-xs text-[#4A423A] hover:bg-[#F2ECE0] hover:text-[#B68D56] tracking-wider transition-colors"
-                        >
-                          {item.name}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <Link
-                  key={link.label}
+                    {/* Dropdown Menu */}
+                    {shopDropdown && (
+                      <div 
+                        className="position-absolute shadow-lg bg-white border py-2"
+                        style={{
+                          top: '100%',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          minWidth: '220px',
+                          borderRadius: '4px',
+                          borderColor: '#E8E2D7',
+                          zIndex: 1100,
+                        }}
+                      >
+                        {link.subcategories?.map((sub) => (
+                          <Link
+                            key={sub.label}
+                            href={sub.href}
+                            className="dropdown-item px-4 py-2 text-dark"
+                            style={{ fontSize: '0.78rem', letterSpacing: '0.08em' }}
+                          >
+                            {sub.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <Link 
+                  key={link.label} 
                   href={link.href}
-                  className={`hover:text-[#B68D56] transition-colors relative py-2 ${
-                    pathname === link.href ? 'text-[#B68D56]' : ''
-                  }`}
-                >
-                  <span>{link.label}</span>
-                  {pathname === link.href && (
-                    <span className="absolute bottom-0 left-0 w-full h-[1.5px] bg-[#B68D56]" />
-                  )}
-                </Link>
-              )
-            )}
-          </div>
-
-          {/* Utility Icons */}
-          <div className="flex items-center space-x-4 md:space-x-6 text-[#2A2623]">
-            {/* Search */}
-            <button
-              onClick={() => setIsSearchOpen(true)}
-              className="p-1.5 hover:text-[#B68D56] transition-colors"
-              aria-label="Search Catalog"
-            >
-              <Search className="w-5 h-5 stroke-[1.7]" />
-            </button>
-
-            {/* Admin / Account Shortcut */}
-            <Link
-              href="/admin/ira/login"
-              className="p-1.5 hover:text-[#B68D56] transition-colors relative group"
-              aria-label="Admin Portal"
-              title="Admin Portal (/admin/ira/login)"
-            >
-              <User className="w-5 h-5 stroke-[1.7]" />
-            </Link>
-
-            {/* Wishlist */}
-            <button
-              onClick={() => setIsWishlistOpen(true)}
-              className="p-1.5 hover:text-[#B68D56] transition-colors relative"
-              aria-label="Open Wishlist"
-            >
-              <Heart className="w-5 h-5 stroke-[1.7]" />
-              {wishlistCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-[#B68D56] text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-                  {wishlistCount}
-                </span>
-              )}
-            </button>
-
-            {/* Shopping Bag / Cart */}
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="p-1.5 hover:text-[#B68D56] transition-colors relative"
-              aria-label="Open Cart"
-            >
-              <ShoppingBag className="w-5 h-5 stroke-[1.7]" />
-              <span className="absolute -top-1 -right-1 bg-[#231F1C] text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-semibold">
-                {cartCount}
-              </span>
-            </button>
-
-            {/* Mobile Menu Toggle */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-1.5 text-[#2A2623]"
-              aria-label="Toggle Navigation Menu"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Navigation Drawer */}
-        {mobileMenuOpen && (
-          <div className="lg:hidden mt-3 pt-4 border-t border-[#EDE5D8] flex flex-col space-y-3 pb-4">
-            {navLinks.map((link) => (
-              <div key={link.label} className="px-2">
-                <Link
-                  href={link.href}
-                  className="block text-sm font-medium tracking-wider text-[#3D3731] hover:text-[#B68D56] py-1"
+                  className={`nav-link-ira ${isActive ? 'active' : ''}`}
                 >
                   {link.label}
                 </Link>
-                {link.hasDropdown && (
-                  <div className="pl-4 mt-1 border-l border-[#EDE5D8] space-y-2 py-1">
-                    {link.dropdownItems?.map((item) => (
-                      <Link
-                        key={item.name}
-                        href={item.href}
-                        className="block text-xs text-[#6F665C] hover:text-[#B68D56]"
-                      >
-                        {item.name}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-            <div className="pt-2 px-2 border-t border-[#EDE5D8]/70 flex items-center justify-between text-xs text-[#8F867C]">
-              <Link href="/admin/ira/login" className="hover:text-[#B68D56]">
-                IRA Admin Portal →
+              );
+            })}
+          </nav>
+
+          {/* Right Icon Actions */}
+          <div className="d-flex align-items-center gap-3">
+            {/* Search Trigger */}
+            <button 
+              className="btn btn-link p-1 text-dark" 
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search collection"
+            >
+              <Search size={19} />
+            </button>
+
+            {/* Customer Account & Profile Trigger */}
+            <button 
+              type="button"
+              onClick={() => {
+                if (user) {
+                  openProfileDrawer();
+                } else {
+                  openAuthModal();
+                }
+              }}
+              className="btn btn-link p-1 text-dark position-relative d-flex align-items-center"
+              title={user ? `Signed in as ${user.name}` : 'Sign In with Google / Account'}
+              aria-label="Customer Account"
+            >
+              {user?.avatar ? (
+                <div 
+                  className="rounded-circle overflow-hidden position-relative border"
+                  style={{ width: '26px', height: '26px', borderColor: 'var(--gold-primary)' }}
+                >
+                  <Image src={user.avatar} alt={user.name} fill sizes="26px" style={{ objectFit: 'cover' }} />
+                </div>
+              ) : user ? (
+                <div 
+                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                  style={{ width: '26px', height: '26px', backgroundColor: 'var(--gold-primary)', fontSize: '0.72rem' }}
+                >
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              ) : (
+                <User size={19} />
+              )}
+              {user && (
+                <span 
+                  className="position-absolute bottom-0 end-0 rounded-circle"
+                  style={{ width: '7px', height: '7px', backgroundColor: '#34A853', border: '1px solid #fff' }}
+                  title="Verified Customer Session"
+                />
+              )}
+            </button>
+
+            {/* Wishlist Link */}
+            <Link 
+              href="/wishlist" 
+              className="btn btn-link p-1 text-dark position-relative"
+              aria-label="View Wishlist"
+            >
+              <Heart size={19} />
+              {wishlist.length > 0 && (
+                <span 
+                  className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                  style={{
+                    backgroundColor: 'var(--gold-primary)',
+                    color: '#fff',
+                    fontSize: '0.6rem',
+                    padding: '2px 5px'
+                  }}
+                >
+                  {wishlist.length}
+                </span>
+              )}
+            </Link>
+
+            {/* Cart Trigger */}
+            <button 
+              className="btn btn-link p-1 text-dark position-relative"
+              onClick={() => setIsCartOpen(true)}
+              aria-label="Shopping Cart"
+            >
+              <ShoppingBag size={20} />
+              <span 
+                className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                style={{
+                  backgroundColor: 'var(--gold-primary)',
+                  color: '#fff',
+                  fontSize: '0.62rem',
+                  padding: '2px 5.5px'
+                }}
+              >
+                {cartCount}
+              </span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile Drawer */}
+      {mobileMenuOpen && (
+        <div 
+          className="position-fixed top-0 start-0 w-100 h-100" 
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1200 }}
+          onClick={() => setMobileMenuOpen(false)}
+        >
+          <div 
+            className="bg-white h-100 p-4 d-flex flex-column"
+            style={{ width: '82%', maxWidth: '340px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex justify-content-between align-items-center pb-3 border-bottom mb-4">
+              <Link 
+                href="/" 
+                onClick={() => setMobileMenuOpen(false)} 
+                className="brand-logo-container"
+              >
+                <div className="brand-logo-mark" style={{ width: '36px', height: '42px' }}>
+                  <Image src="/logo.png" alt="IRA" fill sizes="36px" style={{ objectFit: 'contain' }} />
+                </div>
+                <div className="brand-text-block">
+                  <span className="brand-title fs-5">IRA</span>
+                  <span className="brand-subtitle" style={{ fontSize: '0.55rem' }}>LIFESTYLE</span>
+                </div>
               </Link>
-              <span>Elegance in Every Thread</span>
+              <button 
+                className="btn btn-link text-dark p-0"
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Close menu"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className="d-flex flex-column gap-3 flex-grow-1">
+              <Link href="/" className="fs-6 fw-semibold text-dark text-decoration-none">HOME</Link>
+              <Link href="/shop" className="fs-6 fw-semibold text-dark text-decoration-none">ALL PRODUCTS</Link>
+              <div className="ps-3 d-flex flex-column gap-2 text-muted" style={{ fontSize: '0.85rem' }}>
+                <Link href="/shop/dresses" className="text-decoration-none text-muted">• Dresses</Link>
+                <Link href="/shop/kurtis" className="text-decoration-none text-muted">• Kurtis</Link>
+                <Link href="/shop/sarees" className="text-decoration-none text-muted">• Sarees</Link>
+                <Link href="/shop/co-ord-sets" className="text-decoration-none text-muted">• Co-ord Sets</Link>
+                <Link href="/shop/new-arrivals" className="text-decoration-none text-muted">• New Arrivals</Link>
+              </div>
+              <Link href="/collections" className="fs-6 fw-semibold text-dark text-decoration-none">COLLECTIONS</Link>
+              <Link href="/about" className="fs-6 fw-semibold text-dark text-decoration-none">ABOUT IRA</Link>
+              <Link href="/contact" className="fs-6 fw-semibold text-dark text-decoration-none">CONTACT US</Link>
+              <button 
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  if (user) {
+                    openProfileDrawer();
+                  } else {
+                    openAuthModal();
+                  }
+                }}
+                className="btn btn-link text-start p-0 fs-6 fw-semibold text-decoration-none pt-3 border-top d-flex align-items-center justify-content-between" 
+                style={{ color: 'var(--gold-primary)' }}
+              >
+                <span>{user ? `MY ACCOUNT (${user.name.split(' ')[0].toUpperCase()})` : 'SIGN IN WITH GOOGLE'}</span>
+                <User size={18} />
+              </button>
+            </div>
+
+            <div className="pt-3 border-top text-center text-muted" style={{ fontSize: '0.75rem' }}>
+              <p className="mb-2">Elegance In Every Thread</p>
+              <div className="d-flex justify-content-center gap-3">
+                <InstagramIcon size={16} />
+                <FacebookIcon size={16} />
+                <YoutubeIcon size={16} />
+              </div>
             </div>
           </div>
-        )}
-      </nav>
-    </header>
+        </div>
+      )}
+
+      {/* Search Modal */}
+      <SearchModal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>
   );
 }

@@ -1,63 +1,81 @@
+import React, { Suspense } from 'react';
 import type { Metadata, Viewport } from 'next';
-import { Cormorant_Garamond, Plus_Jakarta_Sans, Alex_Brush } from 'next/font/google';
+import 'bootstrap/dist/css/bootstrap.min.css';
 import './globals.css';
-import { CartWishlistProvider } from '@/context/CartWishlistContext';
+import { CartProvider } from '@/context/CartContext';
+import { AuthProvider } from '@/context/AuthContext';
 import SmoothScroll from '@/components/SmoothScroll';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import CartDrawer from '@/components/CartDrawer';
-import WishlistDrawer from '@/components/WishlistDrawer';
-import SearchModal from '@/components/SearchModal';
+import CustomerAuthModal from '@/components/CustomerAuthModal';
+import CustomerProfileDrawer from '@/components/CustomerProfileDrawer';
+import ScrollReveal from '@/components/ScrollReveal';
 
-const cormorant = Cormorant_Garamond({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-serif',
-  display: 'swap',
-});
-
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
-const alexBrush = Alex_Brush({
-  subsets: ['latin'],
-  weight: ['400'],
-  variable: '--font-script',
-  display: 'swap',
-});
+export const viewport: Viewport = {
+  themeColor: '#1A1613',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+};
 
 export const metadata: Metadata = {
-  title: 'IRA LIFESTYLE | Timeless Elegance For Every You',
+  metadataBase: new URL('https://iralifestyle.com'),
+  title: {
+    default: 'IRA Lifestyle | Timeless Elegance For Every You - Designer Ethnic Wear',
+    template: '%s | IRA Lifestyle',
+  },
   description:
-    'Crafted for the modern woman — graceful, confident and effortlessly stylish. Discover our latest collection of premium ethnic and contemporary wear.',
+    'Handcrafted designer ethnic wear, royal anarkali dresses, festive kurtis, pure chiffon sarees & bespoke co-ord sets. Designed by Nikhil & Anju at IRA Lifestyle Studio, Guruvayoor & Thrissur, Kerala.',
   keywords: [
     'IRA Lifestyle',
-    'luxury ethnic wear',
-    'designer anarkali',
+    'IRA Lifestyle Guruvayoor',
+    'IRA Lifestyle Thrissur',
+    'designer ethnic wear',
+    'luxury indian clothing',
+    'anarkali dresses',
     'chiffon sarees',
-    'silk co-ord sets',
-    'kurti set',
-    'Indian wedding wear',
-    'designer clothing',
+    'embroidered kurtis',
+    'ethnic co-ord sets',
+    'kerala luxury boutique',
+    'bridal couture india',
+    'contemporary festive wear',
   ],
-  authors: [{ name: 'IRA Lifestyle' }],
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'),
+  authors: [{ name: 'IRA Lifestyle', url: 'https://iralifestyle.com' }],
+  creator: 'IRA Lifestyle',
+  publisher: 'IRA Lifestyle Studio',
+  applicationName: 'IRA Lifestyle',
+  category: 'fashion',
+  alternates: {
+    canonical: '/',
+  },
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
+  icons: {
+    icon: [
+      { url: '/icon.png', type: 'image/png' },
+      { url: '/favicon.ico' },
+    ],
+    apple: [
+      { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+    shortcut: '/icon.png',
+  },
   openGraph: {
-    title: 'IRA LIFESTYLE | Timeless Elegance For Every You',
+    title: 'IRA Lifestyle | Timeless Elegance For Every You',
     description:
-      'Crafted for the modern woman — graceful, confident and effortlessly stylish. Premium ethnic and contemporary clothing.',
+      'Elegance In Every Thread. Premium handcrafted designer ethnic and contemporary clothing for the modern woman.',
     url: 'https://iralifestyle.com',
     siteName: 'IRA Lifestyle',
     images: [
       {
-        url: '/images/hero-model.jpg',
+        url: '/images/hero_desktop.jpg',
         width: 1200,
-        height: 675,
-        alt: 'IRA Lifestyle - Timeless Elegance',
+        height: 630,
+        alt: 'IRA Lifestyle Festive & Bridal Collection',
       },
     ],
     locale: 'en_IN',
@@ -65,23 +83,24 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'IRA LIFESTYLE | Timeless Elegance For Every You',
-    description: 'Crafted for the modern woman — graceful, confident and effortlessly stylish.',
-    images: ['/images/hero-model.jpg'],
+    title: 'IRA Lifestyle | Luxury Ethnic & Festive Fashion',
+    description:
+      'Timeless Elegance For Every You. Shop bespoke handcrafted ethnic couture by Nikhil & Anju.',
+    images: ['/images/hero_desktop.jpg'],
+    creator: '@iralifestyle',
   },
-  icons: {
-    icon: '/images/ira-logo.png',
-    apple: '/images/ira-logo.png',
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
 };
-
-export const viewport: Viewport = {
-  themeColor: '#FAF7F2',
-  width: 'device-width',
-  initialScale: 1,
-};
-
-import { Suspense } from 'react';
 
 export default function RootLayout({
   children,
@@ -89,23 +108,82 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${cormorant.variable} ${plusJakarta.variable} ${alexBrush.variable}`}
-    >
-      <body className="min-h-screen flex flex-col bg-[#FAF7F2] text-[#1A1816] selection:bg-[#B68D56] selection:text-white">
-        <CartWishlistProvider>
-          <SmoothScroll>
-            <Suspense fallback={<div className="h-20 bg-[#FAF7F2]" />}>
-              <Navbar />
-            </Suspense>
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <CartDrawer />
-            <WishlistDrawer />
-            <SearchModal />
-          </SmoothScroll>
-        </CartWishlistProvider>
+    <html lang="en" data-scroll-behavior="smooth">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        
+        {/* Structured Data: JSON-LD for Search Engines & AI Models */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@graph': [
+                {
+                  '@type': 'ClothingStore',
+                  '@id': 'https://iralifestyle.com/#store',
+                  name: 'IRA Lifestyle',
+                  url: 'https://iralifestyle.com',
+                  logo: 'https://iralifestyle.com/logo.png',
+                  image: 'https://iralifestyle.com/images/hero_desktop.jpg',
+                  description:
+                    'Luxury Indian ethnic and contemporary women fashion atelier by Nikhil & Anju. Handcrafted dresses, kurtis, sarees, and co-ords.',
+                  telephone: '+919995466002',
+                  priceRange: '₹₹ - ₹₹₹',
+                  currenciesAccepted: 'INR',
+                  paymentAccepted: 'UPI, Credit Card, Debit Card, Net Banking',
+                  address: {
+                    '@type': 'PostalAddress',
+                    streetAddress: 'East Nada, Near Temple',
+                    addressLocality: 'Guruvayoor',
+                    addressRegion: 'Kerala',
+                    postalCode: '680101',
+                    addressCountry: 'IN',
+                  },
+                  geo: {
+                    '@type': 'GeoCoordinates',
+                    latitude: '10.5946',
+                    longitude: '76.0408',
+                  },
+                  founder: [
+                    { '@type': 'Person', name: 'Nikhil' },
+                    { '@type': 'Person', name: 'Anju' },
+                  ],
+                },
+                {
+                  '@type': 'WebSite',
+                  '@id': 'https://iralifestyle.com/#website',
+                  url: 'https://iralifestyle.com',
+                  name: 'IRA Lifestyle',
+                  publisher: { '@id': 'https://iralifestyle.com/#store' },
+                  potentialAction: {
+                    '@type': 'SearchAction',
+                    target: 'https://iralifestyle.com/shop?q={search_term_string}',
+                    'query-input': 'required name=search_term_string',
+                  },
+                },
+              ],
+            }),
+          }}
+        />
+      </head>
+      <body>
+        <AuthProvider>
+          <CartProvider>
+            <SmoothScroll>
+              <ScrollReveal />
+              <div className="d-flex flex-column min-vh-100">
+                <Navbar />
+                <main className="flex-grow-1">{children}</main>
+                <Footer />
+              </div>
+              <CartDrawer />
+              <CustomerAuthModal />
+              <CustomerProfileDrawer />
+            </SmoothScroll>
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );
