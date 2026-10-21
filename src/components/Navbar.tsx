@@ -47,20 +47,46 @@ export default function Navbar() {
     setShopDropdown(false);
   }, [pathname]);
 
+  const [categoriesList, setCategoriesList] = useState<Array<{ label: string; href: string }>>([
+    { label: 'Set saree', href: '/shop/set-saree' },
+    { label: 'Set mund', href: '/shop/set-mund' },
+    { label: 'Cream Double Mund', href: '/shop/cream-double-mund' },
+    { label: 'White Double mund', href: '/shop/white-double-mund' },
+    { label: 'Frock', href: '/shop/frock' },
+    { label: 'Churidar set', href: '/shop/churidar-set' },
+    { label: 'cotton handkerchief', href: '/shop/cotton-handkerchief' },
+    { label: 'Bath towels', href: '/shop/bath-towels' },
+    { label: 'Inner wears for men and women', href: '/shop/inner-wears' },
+    { label: 'Bedsheets', href: '/shop/bedsheets' },
+    { label: 'Pillow covers', href: '/shop/pillow-covers' },
+    { label: 'Colour saree', href: '/shop/colour-saree' },
+    { label: 'Davani set', href: '/shop/davani-set' },
+    { label: 'Blouse materials', href: '/shop/blouse-materials' },
+  ]);
+
+  useEffect(() => {
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.categories && data.categories.length > 0) {
+          setCategoriesList(
+            data.categories.map((c: any) => ({
+              label: c.name,
+              href: `/shop/${c.slug}`,
+            }))
+          );
+        }
+      })
+      .catch((err) => console.warn('Failed to load categories in navbar', err));
+  }, []);
+
   const navLinks = [
     { label: 'HOME', href: '/' },
     { 
       label: 'SHOP', 
       href: '/shop',
       hasDropdown: true,
-      subcategories: [
-        { label: 'All Ethnic Wear', href: '/shop' },
-        { label: 'Dresses & Gowns', href: '/shop/dresses' },
-        { label: 'Embroidered Kurtis', href: '/shop/kurtis' },
-        { label: 'Chiffon & Silk Sarees', href: '/shop/sarees' },
-        { label: 'Co-ord Sets', href: '/shop/co-ord-sets' },
-        { label: 'New Arrivals', href: '/shop/new-arrivals' },
-      ]
+      subcategories: categoriesList,
     },
     { label: 'COLLECTIONS', href: '/collections' },
     { label: 'ABOUT', href: '/about' },
@@ -144,30 +170,41 @@ export default function Navbar() {
                       <ChevronDown size={14} style={{ transition: 'transform 0.2s', transform: shopDropdown ? 'rotate(180deg)' : 'none' }} />
                     </Link>
 
-                    {/* Dropdown Menu */}
+                    {/* Dropdown Menu - 2 Column Luxury Grid */}
                     {shopDropdown && (
                       <div 
-                        className="position-absolute shadow-lg bg-white border py-2"
+                        className="position-absolute shadow-lg bg-white border p-3 rounded"
                         style={{
                           top: '100%',
                           left: '50%',
                           transform: 'translateX(-50%)',
-                          minWidth: '220px',
-                          borderRadius: '4px',
+                          minWidth: '460px',
                           borderColor: '#E8E2D7',
                           zIndex: 1100,
                         }}
                       >
-                        {link.subcategories?.map((sub) => (
-                          <Link
-                            key={sub.label}
-                            href={sub.href}
-                            className="dropdown-item px-4 py-2 text-dark"
-                            style={{ fontSize: '0.78rem', letterSpacing: '0.08em' }}
-                          >
-                            {sub.label}
+                        <div className="d-flex justify-content-between align-items-center pb-2 mb-2 border-bottom">
+                          <span className="text-uppercase fw-semibold" style={{ fontSize: '0.68rem', letterSpacing: '0.14em', color: 'var(--gold-primary)' }}>
+                            Boutique Collections
+                          </span>
+                          <Link href="/shop" className="text-decoration-none small text-muted hover-gold" style={{ fontSize: '0.72rem' }}>
+                            View All Products →
                           </Link>
-                        ))}
+                        </div>
+                        <div className="row g-1">
+                          {categoriesList.map((sub) => (
+                            <div key={sub.label} className="col-6">
+                              <Link
+                                href={sub.href}
+                                className="dropdown-item px-2.5 py-1.5 text-dark rounded d-flex align-items-center"
+                                style={{ fontSize: '0.78rem', letterSpacing: '0.03em' }}
+                              >
+                                <span className="me-2" style={{ color: 'var(--gold-primary)', fontSize: '0.9rem' }}>•</span>
+                                <span className="text-truncate">{sub.label}</span>
+                              </Link>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -319,13 +356,16 @@ export default function Navbar() {
 
             <div className="d-flex flex-column gap-3 flex-grow-1">
               <Link href="/" className="fs-6 fw-semibold text-dark text-decoration-none">HOME</Link>
-              <Link href="/shop" className="fs-6 fw-semibold text-dark text-decoration-none">ALL PRODUCTS</Link>
-              <div className="ps-3 d-flex flex-column gap-2 text-muted" style={{ fontSize: '0.85rem' }}>
-                <Link href="/shop/dresses" className="text-decoration-none text-muted">• Dresses</Link>
-                <Link href="/shop/kurtis" className="text-decoration-none text-muted">• Kurtis</Link>
-                <Link href="/shop/sarees" className="text-decoration-none text-muted">• Sarees</Link>
-                <Link href="/shop/co-ord-sets" className="text-decoration-none text-muted">• Co-ord Sets</Link>
-                <Link href="/shop/new-arrivals" className="text-decoration-none text-muted">• New Arrivals</Link>
+              <div className="d-flex justify-content-between align-items-center">
+                <Link href="/shop" className="fs-6 fw-semibold text-dark text-decoration-none">SHOP BY CATEGORY</Link>
+                <Link href="/shop" className="small text-muted text-decoration-none" style={{ fontSize: '0.75rem' }}>View All →</Link>
+              </div>
+              <div className="ps-2 pe-1 d-flex flex-column gap-1 text-muted" style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                {categoriesList.map((cat) => (
+                  <Link key={cat.label} href={cat.href} className="text-decoration-none text-muted py-1 small border-bottom border-light">
+                    • {cat.label}
+                  </Link>
+                ))}
               </div>
               <Link href="/collections" className="fs-6 fw-semibold text-dark text-decoration-none">COLLECTIONS</Link>
               <Link href="/about" className="fs-6 fw-semibold text-dark text-decoration-none">ABOUT IRA</Link>

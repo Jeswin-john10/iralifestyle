@@ -1,10 +1,11 @@
 import { connectToDatabase } from './mongodb';
-import { ProductModel, OrderModel, InquiryModel, NewsletterModel, ReviewModel } from './models';
-import { INITIAL_PRODUCTS } from '@/data/initialData';
-import { Product, Order, Inquiry, Review } from '@/types';
+import { ProductModel, OrderModel, InquiryModel, NewsletterModel, ReviewModel, CategoryModel } from './models';
+import { INITIAL_PRODUCTS, CATEGORIES } from '@/data/initialData';
+import { Product, Order, Inquiry, Review, Category } from '@/types';
 
 // In-memory persistent state for development or zero-config fallback
 let memoryProducts: Product[] = [...INITIAL_PRODUCTS];
+let memoryCategories: Category[] = [...CATEGORIES];
 let memoryOrders: Order[] = [
   {
     orderId: 'ORD-IRA-1092',
@@ -22,18 +23,18 @@ let memoryOrders: Order[] = [
     },
     items: [
       {
-        productId: 'ira-101',
-        title: 'Floral Anarkali Dress',
-        price: 2999,
-        size: 'M',
+        productId: 'ira-set-saree-1',
+        title: 'Traditional Kerala Kasavu Set Saree',
+        price: 2499,
+        size: 'Free Size',
         quantity: 1,
-        image: '/images/cat_dress.jpg',
+        image: '/images/hero_set_saree.jpg',
       }
     ],
-    subtotal: 2999,
+    subtotal: 2499,
     discount: 0,
     shipping: 0,
-    total: 2999,
+    total: 2499,
     paymentMethod: 'UPI',
     paymentStatus: 'paid',
     orderStatus: 'Confirmed',
@@ -58,39 +59,39 @@ let memoryNewsletters: Array<{ email: string; createdAt: string }> = [
 let memoryReviews: Review[] = [
   {
     _id: 'rev-101',
-    productId: 'ira-101',
-    productTitle: 'Floral Anarkali Dress',
-    productImage: '/images/cat_dress.jpg',
+    productId: 'ira-set-saree-1',
+    productTitle: 'Traditional Kerala Kasavu Set Saree',
+    productImage: '/images/hero_set_saree.jpg',
     customerName: 'Pooja Menon',
     customerEmail: 'pooja.menon@gmail.com',
     rating: 5,
-    comment: 'The drape and pure silk lining are exquisite! Wore this to a family wedding in Thrissur and received countless compliments.',
+    comment: 'The Kasavu zari and pure handloom drape are exquisite! Wore this to a temple ceremony in Thrissur and received countless compliments.',
     verifiedPurchase: true,
     status: 'approved',
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
   },
   {
     _id: 'rev-102',
-    productId: 'ira-102',
-    productTitle: 'Embroidered Silk Kurti',
-    productImage: '/images/cat_kurti.jpg',
-    customerName: 'Divya Nambiar',
-    customerEmail: 'divya.nambiar@gmail.com',
+    productId: 'ira-cream-mundu-1',
+    productTitle: 'Royal Cream Kasavu Double Mundu',
+    productImage: '/images/hero_men_double_mundu.jpg',
+    customerName: 'Naveen Nambiar',
+    customerEmail: 'naveen.nambiar@gmail.com',
     rating: 5,
-    comment: 'Exceptional zari embroidery quality. The fabric breatheability in Kerala weather is truly comfortable and regal.',
+    comment: 'Exceptional 80s yarn quality. The gold border is thick, royal, and stays crisp all day.',
     verifiedPurchase: true,
     status: 'approved',
     createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
   },
   {
     _id: 'rev-103',
-    productId: 'ira-103',
-    productTitle: 'Banarasi Heritage Saree',
-    productImage: '/images/cat_saree.jpg',
+    productId: 'ira-davani-1',
+    productTitle: 'Traditional Kerala Dhavani Half Saree Set',
+    productImage: '/images/cat_davani.jpg',
     customerName: 'Ananya Sharma',
     customerEmail: 'ananya.sharma@gmail.com',
     rating: 5,
-    comment: 'Pure handloom authenticity! The golden zari pallu shimmers gracefully. Highly recommend IRA Lifestyle!',
+    comment: 'Pure handloom authenticity! The pleated pavada flare and contrast dupatta are breathtaking. Highly recommend IRA Lifestyle!',
     verifiedPurchase: true,
     status: 'approved',
     createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
@@ -101,21 +102,29 @@ export async function getProducts(filter?: { category?: string; featured?: boole
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      // Check if DB is empty, seed if so
-      const count = await ProductModel.countDocuments();
-      if (count === 0) {
-        await ProductModel.insertMany(INITIAL_PRODUCTS);
-      } else {
-        // Sync any updated image URLs from INITIAL_PRODUCTS for initial items
-        for (const initP of INITIAL_PRODUCTS) {
-          await ProductModel.updateOne(
-            { id: initP.id },
-            { $set: { image: initP.image, gallery: initP.gallery } }
-          );
-        }
+      // 1. Remove obsolete dummy products
+      const dummyIds = ['ira-101', 'ira-102', 'ira-103', 'ira-104', 'ira-105', 'ira-106'];
+      await ProductModel.deleteMany({ id: { $in: dummyIds } });
+
+      // 2. Upsert authentic 14 boutique categories products
+      for (const p of INITIAL_PRODUCTS) {
+        await ProductModel.updateOne(
+          { id: p.id },
+          { $set: p },
+          { upsert: true }
+        );
       }
+
+      // 3. Build search query
       const query: Record<string, unknown> = {};
-      if (filter?.category) query.category = filter.category;
+      if (filter?.category && filter.category !== 'all') {
+        const catFilter = filter.category.trim();
+        query.$or = [
+          { category: { $regex: new RegExp(`^${catFilter}$`, 'i') } },
+          { categoryLabel: { $regex: new RegExp(`^${catFilter}$`, 'i') } },
+          { slug: { $regex: new RegExp(`^${catFilter}$`, 'i') } },
+        ];
+      }
       if (filter?.featured) query.isFeatured = true;
 
       const docs = await ProductModel.find(query).lean();
@@ -130,9 +139,14 @@ export async function getProducts(filter?: { category?: string; featured?: boole
   }
 
   // Memory fallback
-  let list = [...memoryProducts];
-  if (filter?.category) {
-    list = list.filter(p => p.category.toLowerCase() === filter.category?.toLowerCase());
+  let list = [...INITIAL_PRODUCTS];
+  if (filter?.category && filter.category !== 'all') {
+    const cat = filter.category.toLowerCase().trim();
+    list = list.filter(p => 
+      p.category.toLowerCase() === cat || 
+      p.categoryLabel.toLowerCase() === cat || 
+      p.slug.toLowerCase() === cat
+    );
   }
   if (filter?.featured) {
     list = list.filter(p => p.isFeatured);
@@ -517,6 +531,109 @@ export async function updateReviewStatus(id: string, status: string): Promise<bo
   }
   return false;
 }
+
+export async function getCategories(): Promise<Category[]> {
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      // Sync all 14 categories with updated images and metadata
+      for (const cat of CATEGORIES) {
+        await CategoryModel.updateOne(
+          { slug: cat.slug },
+          { $set: { name: cat.name, image: cat.image, tagline: cat.tagline, itemCount: cat.itemCount } },
+          { upsert: true }
+        );
+      }
+      const docs = await CategoryModel.find().lean();
+      return docs.map(doc => ({
+        id: doc.id || (doc._id as unknown as string).toString(),
+        name: doc.name,
+        slug: doc.slug,
+        image: doc.image || '/images/hero_set_saree.jpg',
+        tagline: doc.tagline || '',
+        itemCount: doc.itemCount || 0,
+      }));
+    }
+  } catch (err) {
+    console.warn('MongoDB getCategories fallback:', err);
+  }
+  return CATEGORIES;
+}
+
+export async function createCategory(catData: Partial<Category>): Promise<Category> {
+  const name = catData.name?.trim() || 'New Category';
+  const slug = catData.slug?.trim() || name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const newCat: Category = {
+    id: catData.id || `cat-${Date.now()}`,
+    name,
+    slug,
+    image: catData.image || '/images/hero_set_saree.jpg',
+    tagline: catData.tagline || 'Exquisite traditional handcrafted wear',
+    itemCount: Number(catData.itemCount) || 0,
+  };
+
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      await CategoryModel.create(newCat);
+      return newCat;
+    }
+  } catch (err) {
+    console.warn('MongoDB createCategory fallback:', err);
+  }
+
+  memoryCategories.push(newCat);
+  return newCat;
+}
+
+export async function updateCategory(idOrSlug: string, updates: Partial<Category>): Promise<Category | null> {
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      const updated = await CategoryModel.findOneAndUpdate(
+        { $or: [{ id: idOrSlug }, { slug: idOrSlug }] },
+        { $set: updates },
+        { new: true }
+      ).lean();
+      if (updated) {
+        return {
+          id: updated.id || (updated._id as unknown as string).toString(),
+          name: updated.name,
+          slug: updated.slug,
+          image: updated.image,
+          tagline: updated.tagline,
+          itemCount: updated.itemCount,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('MongoDB updateCategory fallback:', err);
+  }
+
+  const idx = memoryCategories.findIndex(c => c.id === idOrSlug || c.slug === idOrSlug);
+  if (idx !== -1) {
+    memoryCategories[idx] = { ...memoryCategories[idx], ...updates };
+    return memoryCategories[idx];
+  }
+  return null;
+}
+
+export async function deleteCategory(idOrSlug: string): Promise<boolean> {
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      await CategoryModel.deleteOne({ $or: [{ id: idOrSlug }, { slug: idOrSlug }] });
+      return true;
+    }
+  } catch (err) {
+    console.warn('MongoDB deleteCategory fallback:', err);
+  }
+
+  const prevLen = memoryCategories.length;
+  memoryCategories = memoryCategories.filter(c => c.id !== idOrSlug && c.slug !== idOrSlug);
+  return memoryCategories.length < prevLen;
+}
+
 
 
 

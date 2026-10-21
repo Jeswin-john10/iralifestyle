@@ -12,13 +12,31 @@ import ProductCard from '@/components/ProductCard';
 
 export default function ShopPage() {
   const { toggleWishlist, isInWishlist } = useCart();
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState(CATEGORIES);
+  const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('featured');
   const [maxPrice, setMaxPrice] = useState<number>(10000);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
+  // Fetch categories from DB
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (data.categories && data.categories.length > 0) {
+          setCategories(data.categories);
+        }
+      } catch (err) {
+        console.error('Fetch categories error', err);
+      }
+    }
+    fetchCategories();
+  }, []);
+
+  // Fetch products from DB
   useEffect(() => {
     async function fetchProducts() {
       setLoading(true);
@@ -69,57 +87,62 @@ export default function ShopPage() {
         </div>
 
         {/* Filter & Sort Bar */}
-        <div className="bg-white p-3 rounded border mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3 shadow-sm">
-          {/* Category Chips */}
-          <div className="d-flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`btn btn-sm ${selectedCategory === 'all' ? 'btn-dark' : 'btn-outline-secondary'}`}
-              style={{ fontSize: '0.76rem', letterSpacing: '0.08em' }}
+        <div className="bg-white p-3 rounded border mb-4 shadow-sm">
+          <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+            {/* Category Chips with Horizontal Scroll */}
+            <div 
+              className="d-flex align-items-center gap-2 overflow-auto pb-1 pb-md-0" 
+              style={{ maxWidth: '100%', WebkitOverflowScrolling: 'touch' }}
             >
-              ALL ITEMS
-            </button>
-            {CATEGORIES.map((cat) => (
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.slug)}
-                className={`btn btn-sm ${selectedCategory === cat.slug ? 'btn-dark' : 'btn-outline-secondary'}`}
-                style={{ fontSize: '0.76rem', letterSpacing: '0.08em' }}
+                onClick={() => setSelectedCategory('all')}
+                className={`btn btn-sm text-nowrap ${selectedCategory === 'all' ? 'btn-dark' : 'btn-outline-secondary'}`}
+                style={{ fontSize: '0.74rem', letterSpacing: '0.06em', borderRadius: '20px' }}
               >
-                {cat.name}
+                ALL ITEMS ({products.length})
               </button>
-            ))}
-          </div>
-
-          {/* Sort & Price Filter */}
-          <div className="d-flex align-items-center gap-3 ms-auto">
-            <div className="d-flex align-items-center gap-2">
-              <span className="text-muted small text-nowrap">Max Price: ₹{maxPrice.toLocaleString('en-IN')}</span>
-              <input
-                type="range"
-                min="1500"
-                max="10000"
-                step="500"
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(Number(e.target.value))}
-                className="form-range"
-                style={{ width: '110px' }}
-              />
+              {categories.map((cat) => (
+                <button
+                  key={cat.id || cat.slug}
+                  onClick={() => setSelectedCategory(cat.slug)}
+                  className={`btn btn-sm text-nowrap ${selectedCategory === cat.slug ? 'btn-dark' : 'btn-outline-secondary'}`}
+                  style={{ fontSize: '0.74rem', letterSpacing: '0.06em', borderRadius: '20px' }}
+                >
+                  {cat.name}
+                </button>
+              ))}
             </div>
 
-            <div className="d-flex align-items-center gap-1">
-              <ArrowUpDown size={14} className="text-muted" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="form-select form-select-sm border"
-                style={{ fontSize: '0.78rem', minWidth: '130px' }}
-              >
-                <option value="featured">Featured First</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="rating">Highest Rated</option>
-              </select>
+            {/* Sort & Price Filter */}
+            <div className="d-flex align-items-center justify-content-between gap-3 ms-md-auto flex-wrap">
+              <div className="d-flex align-items-center gap-2">
+                <span className="text-muted small text-nowrap">Max: ₹{maxPrice.toLocaleString('en-IN')}</span>
+                <input
+                  type="range"
+                  min="300"
+                  max="10000"
+                  step="100"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(Number(e.target.value))}
+                  className="form-range"
+                  style={{ width: '100px' }}
+                />
+              </div>
+
+              <div className="d-flex align-items-center gap-1">
+                <ArrowUpDown size={14} className="text-muted" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="form-select form-select-sm border"
+                  style={{ fontSize: '0.78rem', minWidth: '135px' }}
+                >
+                  <option value="featured">Featured First</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                  <option value="rating">Highest Rated</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Product, Order, Review } from '@/types';
+import { Product, Order, Review, Category } from '@/types';
 import { 
   Package, 
   ShoppingBag, 
@@ -48,7 +48,10 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  Tag,
+  Layers,
+  FolderTree
 } from 'lucide-react';
 
 interface InquiryItem {
@@ -215,7 +218,7 @@ export default function AdminDashboardPage() {
 
   // Navigation & UI state
   const [activeTab, setActiveTab] = useState<
-    'dashboard' | 'products' | 'orders' | 'reviews' | 'inquiries' | 'subscribers' | 'reports' | 'options'
+    'dashboard' | 'products' | 'categories' | 'orders' | 'reviews' | 'inquiries' | 'subscribers' | 'reports' | 'options'
   >('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -229,10 +232,22 @@ export default function AdminDashboardPage() {
 
   // Data states
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [subscribers, setSubscribers] = useState<SubscriberItem[]>([]);
+
+  // Category Management states
+  const [categorySearch, setCategorySearch] = useState('');
+  const [showAddCatModal, setShowAddCatModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [newCat, setNewCat] = useState({
+    name: '',
+    slug: '',
+    tagline: '',
+    image: '/images/hero_set_saree.jpg',
+  });
 
   // Search & Filter
   const [productSearch, setProductSearch] = useState('');
@@ -315,20 +330,22 @@ export default function AdminDashboardPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [prodRes, ordRes, inqRes, subRes, revRes] = await Promise.all([
+      const [prodRes, ordRes, inqRes, subRes, revRes, catRes] = await Promise.all([
         fetch('/api/products'),
         fetch('/api/orders'),
         fetch('/api/inquiries'),
         fetch('/api/newsletter'),
         fetch('/api/reviews'),
+        fetch('/api/categories'),
       ]);
 
-      const [prodData, ordData, inqData, subData, revData] = await Promise.all([
+      const [prodData, ordData, inqData, subData, revData, catData] = await Promise.all([
         prodRes.json(),
         ordRes.json(),
         inqRes.json(),
         subRes.json(),
         revRes.json(),
+        catRes.json(),
       ]);
 
       if (prodData.products) setProducts(prodData.products);
@@ -336,6 +353,7 @@ export default function AdminDashboardPage() {
       if (inqData.inquiries) setInquiries(inqData.inquiries);
       if (subData.subscribers) setSubscribers(subData.subscribers);
       if (revData.reviews) setReviews(revData.reviews);
+      if (catData.categories) setCategories(catData.categories);
     } catch (err) {
       console.error('Failed to load admin data', err);
     } finally {
@@ -544,6 +562,83 @@ export default function AdminDashboardPage() {
       console.error('Delete product error', err);
     }
   };
+
+  // Category Create
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCat.name.trim()) return;
+
+    try {
+      const slug = newCat.slug.trim() || newCat.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newCat, slug }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.category) {
+        setShowAddCatModal(false);
+        setNewCat({ name: '', slug: '', tagline: '', image: '/images/hero_set_saree.jpg' });
+        setCategories((prev) => [...prev, data.category]);
+        showNotification(`Category "${data.category.name}" added successfully!`);
+      }
+    } catch (err) {
+      console.error('Failed to create category', err);
+    }
+  };
+
+  // Category Update
+  const handleUpdateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingCategory),
+      });
+
+      const data = await res.json();
+      if (data.success && data.category) {
+        setCategories((prev) =>
+          prev.map((c) => (c.id === data.category.id || c.slug === data.category.slug ? data.category : c))
+        );
+        setEditingCategory(null);
+        showNotification(`Category "${data.category.name}" updated successfully!`);
+      }
+    } catch (err) {
+      console.error('Failed to update category', err);
+    }
+  };
+
+  // Category Delete
+  const handleDeleteCategory = async (cat: Category) => {
+    if (!confirm(`Are you sure you want to delete category "${cat.name}"? Products in this category may be affected.`)) return;
+
+    try {
+      const res = await fetch(`/api/categories?id=${cat.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setCategories((prev) => prev.filter((c) => c.id !== cat.id && c.slug !== cat.slug));
+        showNotification(`Category "${cat.name}" deleted.`);
+      }
+    } catch (err) {
+      console.error('Failed to delete category', err);
+    }
+  };
+
+  const filteredCategories = useMemo(() => {
+    if (!categorySearch.trim()) return categories;
+    const q = categorySearch.toLowerCase();
+    return categories.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.slug.toLowerCase().includes(q) ||
+        (c.tagline && c.tagline.toLowerCase().includes(q))
+    );
+  }, [categories, categorySearch]);
 
   // Order Status Change
   const handleOrderStatusChange = async (orderId: string, newStatus: string) => {
@@ -1681,6 +1776,27 @@ export default function AdminDashboardPage() {
               </span>
             </button>
 
+            {/* Categories */}
+            <button
+              onClick={() => { setActiveTab('categories'); setMobileSidebarOpen(false); }}
+              className={`nav-link text-start d-flex align-items-center justify-content-between py-2 px-3 rounded ${
+                activeTab === 'categories' ? 'active text-dark' : 'text-light'
+              }`}
+              style={{
+                backgroundColor: activeTab === 'categories' ? '#C5A880' : 'transparent',
+                fontWeight: activeTab === 'categories' ? 600 : 400,
+                fontSize: '0.86rem',
+              }}
+            >
+              <div className="d-flex align-items-center gap-2">
+                <Tag size={17} />
+                <span>Categories</span>
+              </div>
+              <span className="badge rounded-pill bg-dark text-white border border-secondary" style={{ fontSize: '0.68rem' }}>
+                {categories.length}
+              </span>
+            </button>
+
             {/* 3. Orders */}
             <button
               onClick={() => { setActiveTab('orders'); setMobileSidebarOpen(false); }}
@@ -1844,6 +1960,7 @@ export default function AdminDashboardPage() {
               <h2 className="font-serif fw-bold text-dark mb-1" style={{ fontSize: '1.65rem' }}>
                 {activeTab === 'dashboard' && 'Executive Dashboard'}
                 {activeTab === 'products' && 'Luxury Garment Catalog'}
+                {activeTab === 'categories' && 'Boutique Category Architecture'}
                 {activeTab === 'orders' && 'Customer Orders & Shipments'}
                 {activeTab === 'reviews' && 'Client Reviews & Product Sentiments'}
                 {activeTab === 'inquiries' && 'Customer Inquiries & Messages'}
@@ -1874,6 +1991,16 @@ export default function AdminDashboardPage() {
                   style={{ backgroundColor: '#C5A880', border: '1px solid #B3956B' }}
                 >
                   <Plus size={15} /> Add New Garment
+                </button>
+              )}
+
+              {activeTab === 'categories' && (
+                <button
+                  onClick={() => setShowAddCatModal(true)}
+                  className="btn btn-sm text-dark fw-bold d-flex align-items-center gap-1 shadow-sm px-3"
+                  style={{ backgroundColor: '#C5A880', border: '1px solid #B3956B' }}
+                >
+                  <Plus size={15} /> Add New Category
                 </button>
               )}
 
@@ -4386,6 +4513,135 @@ export default function AdminDashboardPage() {
               </div>
             </div>
           )}
+
+          {/* ================= TAB: CATEGORIES ================= */}
+          {activeTab === 'categories' && (
+            <div className="bg-white rounded-3 border shadow-sm p-4">
+              <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+                <div>
+                  <h5 className="font-serif fw-bold text-dark mb-1">Boutique Category Architecture</h5>
+                  <p className="text-muted small mb-0">
+                    Manage categories displayed across the navigation dropdown, shop filters, and product creation.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAddCatModal(true)}
+                  className="btn btn-sm text-dark fw-bold d-flex align-items-center gap-1 shadow-sm px-3"
+                  style={{ backgroundColor: '#C5A880', border: '1px solid #B3956B' }}
+                >
+                  <Plus size={15} /> Add New Category
+                </button>
+              </div>
+
+              {/* Search Bar */}
+              <div className="row g-3 mb-4">
+                <div className="col-12 col-md-6 col-lg-4">
+                  <div className="position-relative">
+                    <Search
+                      size={15}
+                      className="position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search categories..."
+                      value={categorySearch}
+                      onChange={(e) => setCategorySearch(e.target.value)}
+                      className="form-control form-control-sm ps-5 bg-light"
+                    />
+                  </div>
+                </div>
+                <div className="col-12 col-md-6 col-lg-8 text-md-end text-muted small align-self-center">
+                  Total Active Categories: <span className="fw-semibold text-dark">{categories.length}</span>
+                </div>
+              </div>
+
+              {/* Categories Table */}
+              <div className="table-responsive">
+                <table className="table table-hover align-middle mb-0">
+                  <thead className="table-light text-uppercase small text-muted" style={{ fontSize: '0.72rem', letterSpacing: '0.08em' }}>
+                    <tr>
+                      <th style={{ width: '60px' }}>Visual</th>
+                      <th>Category Name</th>
+                      <th>URL Slug</th>
+                      <th>Tagline / Headline</th>
+                      <th className="text-center">Products</th>
+                      <th className="text-end" style={{ width: '120px' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCategories.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center py-5 text-muted">
+                          No categories found matching your search.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredCategories.map((cat) => {
+                        const matchingCount = products.filter(
+                          (p) => p.category?.toLowerCase() === cat.slug?.toLowerCase()
+                        ).length;
+
+                        return (
+                          <tr key={cat.id || cat.slug}>
+                            <td>
+                              <div
+                                className="position-relative rounded overflow-hidden border bg-light"
+                                style={{ width: '42px', height: '42px' }}
+                              >
+                                <Image
+                                  src={cat.image || '/images/hero_set_saree.jpg'}
+                                  alt={cat.name}
+                                  fill
+                                  sizes="42px"
+                                  style={{ objectFit: 'cover' }}
+                                />
+                              </div>
+                            </td>
+                            <td>
+                              <span className="fw-semibold text-dark">{cat.name}</span>
+                            </td>
+                            <td>
+                              <code className="text-muted small bg-light px-2 py-0.5 rounded border">
+                                /shop/{cat.slug}
+                              </code>
+                            </td>
+                            <td className="text-muted small" style={{ maxWidth: '280px' }}>
+                              <span className="text-truncate d-inline-block" style={{ maxWidth: '280px' }}>
+                                {cat.tagline || '—'}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              <span className="badge bg-light text-dark border">
+                                {matchingCount} {matchingCount === 1 ? 'item' : 'items'}
+                              </span>
+                            </td>
+                            <td className="text-end">
+                              <div className="d-flex align-items-center justify-content-end gap-1.5">
+                                <button
+                                  onClick={() => setEditingCategory(cat)}
+                                  className="btn btn-sm btn-outline-secondary p-1"
+                                  title="Edit Category"
+                                >
+                                  <Edit size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteCategory(cat)}
+                                  className="btn btn-sm btn-outline-danger p-1"
+                                  title="Delete Category"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
@@ -4842,11 +5098,30 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setNewProd({ ...newProd, category: e.target.value })}
                     className="form-select"
                   >
-                    <option value="dresses">Dresses & Gowns</option>
-                    <option value="kurtis">Kurtis</option>
-                    <option value="sarees">Sarees</option>
-                    <option value="co-ord-sets">Co-ord Sets</option>
-                    <option value="new-arrivals">New Arrivals</option>
+                    {categories.length > 0 ? (
+                      categories.map((c) => (
+                        <option key={c.id || c.slug} value={c.slug}>
+                          {c.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="set-saree">Set Saree</option>
+                        <option value="set-mund">Set Mund</option>
+                        <option value="cream-double-mund">Cream Double Mund</option>
+                        <option value="white-double-mund">White Double Mund</option>
+                        <option value="frock">Frock</option>
+                        <option value="churidar-set">Churidar Set</option>
+                        <option value="cotton-handkerchief">Cotton Handkerchief</option>
+                        <option value="bath-towels">Bath Towels</option>
+                        <option value="inner-wears">Inner Wears (Men & Women)</option>
+                        <option value="bedsheets">Bedsheets</option>
+                        <option value="pillow-covers">Pillow Covers</option>
+                        <option value="colour-saree">Colour Saree</option>
+                        <option value="davani-set">Davani Set</option>
+                        <option value="blouse-materials">Blouse Materials</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -4989,11 +5264,30 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
                     className="form-select"
                   >
-                    <option value="dresses">Dresses & Gowns</option>
-                    <option value="kurtis">Kurtis</option>
-                    <option value="sarees">Sarees</option>
-                    <option value="co-ord-sets">Co-ord Sets</option>
-                    <option value="new-arrivals">New Arrivals</option>
+                    {categories.length > 0 ? (
+                      categories.map((c) => (
+                        <option key={c.id || c.slug} value={c.slug}>
+                          {c.name}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="set-saree">Set Saree</option>
+                        <option value="set-mund">Set Mund</option>
+                        <option value="cream-double-mund">Cream Double Mund</option>
+                        <option value="white-double-mund">White Double Mund</option>
+                        <option value="frock">Frock</option>
+                        <option value="churidar-set">Churidar Set</option>
+                        <option value="cotton-handkerchief">Cotton Handkerchief</option>
+                        <option value="bath-towels">Bath Towels</option>
+                        <option value="inner-wears">Inner Wears (Men & Women)</option>
+                        <option value="bedsheets">Bedsheets</option>
+                        <option value="pillow-covers">Pillow Covers</option>
+                        <option value="colour-saree">Colour Saree</option>
+                        <option value="davani-set">Davani Set</option>
+                        <option value="blouse-materials">Blouse Materials</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -5086,6 +5380,188 @@ export default function AdminDashboardPage() {
                   style={{ backgroundColor: '#C5A880' }}
                 >
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: ADD CATEGORY ================= */}
+      {showAddCatModal && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+          style={{ backgroundColor: 'rgba(21, 19, 17, 0.75)', backdropFilter: 'blur(4px)', zIndex: 3000 }}
+          onClick={() => setShowAddCatModal(false)}
+        >
+          <div
+            className="bg-white rounded-3 shadow-2xl p-4 w-100"
+            style={{ maxWidth: '520px', border: '1px solid #C5A880' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex justify-content-between align-items-center pb-3 border-bottom mb-3">
+              <h5 className="font-serif fw-bold text-dark mb-0">Add New Category</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowAddCatModal(false)}
+                aria-label="Close"
+              />
+            </div>
+
+            <form onSubmit={handleCreateCategory} className="d-flex flex-column gap-3">
+              <div>
+                <label className="form-label small fw-semibold">Category Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={newCat.name}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    const autoSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                    setNewCat({ ...newCat, name, slug: autoSlug });
+                  }}
+                  placeholder="e.g. Set Saree"
+                  className="form-control"
+                />
+              </div>
+
+              <div>
+                <label className="form-label small fw-semibold">URL Slug *</label>
+                <input
+                  type="text"
+                  required
+                  value={newCat.slug}
+                  onChange={(e) => setNewCat({ ...newCat, slug: e.target.value })}
+                  placeholder="e.g. set-saree"
+                  className="form-control"
+                />
+                <small className="text-muted">Direct URL: /shop/{newCat.slug || 'category-slug'}</small>
+              </div>
+
+              <div>
+                <label className="form-label small fw-semibold">Tagline / Subtitle</label>
+                <input
+                  type="text"
+                  value={newCat.tagline}
+                  onChange={(e) => setNewCat({ ...newCat, tagline: e.target.value })}
+                  placeholder="e.g. Traditional Kerala Kasavu golden border set sarees"
+                  className="form-control"
+                />
+              </div>
+
+              <div>
+                <label className="form-label small fw-semibold">Category Visual Image URL</label>
+                <input
+                  type="text"
+                  value={newCat.image}
+                  onChange={(e) => setNewCat({ ...newCat, image: e.target.value })}
+                  placeholder="/images/hero_set_saree.jpg"
+                  className="form-control"
+                />
+              </div>
+
+              <div className="d-flex justify-content-end gap-2 pt-3 border-top mt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCatModal(false)}
+                  className="btn btn-outline-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn text-dark fw-bold px-4"
+                  style={{ backgroundColor: '#C5A880' }}
+                >
+                  Create Category
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: EDIT CATEGORY ================= */}
+      {editingCategory && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+          style={{ backgroundColor: 'rgba(21, 19, 17, 0.75)', backdropFilter: 'blur(4px)', zIndex: 3000 }}
+          onClick={() => setEditingCategory(null)}
+        >
+          <div
+            className="bg-white rounded-3 shadow-2xl p-4 w-100"
+            style={{ maxWidth: '520px', border: '1px solid #C5A880' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="d-flex justify-content-between align-items-center pb-3 border-bottom mb-3">
+              <h5 className="font-serif fw-bold text-dark mb-0">Edit Category: {editingCategory.name}</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setEditingCategory(null)}
+                aria-label="Close"
+              />
+            </div>
+
+            <form onSubmit={handleUpdateCategory} className="d-flex flex-column gap-3">
+              <div>
+                <label className="form-label small fw-semibold">Category Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCategory.name}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                  className="form-control"
+                />
+              </div>
+
+              <div>
+                <label className="form-label small fw-semibold">URL Slug *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingCategory.slug}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, slug: e.target.value })}
+                  className="form-control"
+                />
+                <small className="text-muted">Direct URL: /shop/{editingCategory.slug}</small>
+              </div>
+
+              <div>
+                <label className="form-label small fw-semibold">Tagline / Subtitle</label>
+                <input
+                  type="text"
+                  value={editingCategory.tagline || ''}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, tagline: e.target.value })}
+                  className="form-control"
+                />
+              </div>
+
+              <div>
+                <label className="form-label small fw-semibold">Category Visual Image URL</label>
+                <input
+                  type="text"
+                  value={editingCategory.image || ''}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, image: e.target.value })}
+                  className="form-control"
+                />
+              </div>
+
+              <div className="d-flex justify-content-end gap-2 pt-3 border-top mt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingCategory(null)}
+                  className="btn btn-outline-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn text-dark fw-bold px-4"
+                  style={{ backgroundColor: '#C5A880' }}
+                >
+                  Save Category
                 </button>
               </div>
             </form>

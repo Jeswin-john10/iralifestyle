@@ -6,6 +6,8 @@ import Image from 'next/image';
 import { 
   ArrowRight, 
   ArrowLeft, 
+  ChevronLeft,
+  ChevronRight,
   Star, 
   Heart, 
   Eye, 
@@ -13,8 +15,8 @@ import {
   ShieldCheck, 
   Truck, 
   Headphones, 
-  Gem,
-  CheckCircle2,
+  Gem, 
+  CheckCircle2, 
   Mail
 } from 'lucide-react';
 import { CATEGORIES, INITIAL_PRODUCTS } from '@/data/initialData';
@@ -37,39 +39,39 @@ const HERO_SLIDES = [
     imageDesktop: '/images/hero_model_desktop.jpg',
     imageMobile: '/images/hero_model_mobile.jpg',
     objectPositionDesktop: 'center 20%',
-    objectPositionMobile: 'center 8%',
+    objectPositionMobile: 'center 52%',
     scriptTop: 'Grace',
     scriptBottom: 'IN EVERY THREAD',
   },
   {
     id: 2,
-    tag: 'ROYAL HERITAGE',
-    title: 'Pure Silk Symphony',
-    subtitle: 'Woven Traditions',
-    desc: 'Handcrafted Banarasi and Kanjivaram silks tailored for timeless celebrations, weddings and unforgettable festive moments.',
+    tag: 'KERALA HERITAGE',
+    title: 'Traditional Set Saree',
+    subtitle: 'Golden Kasavu Weaves',
+    desc: 'Graceful Kerala Kasavu set sarees crafted with pure golden zari borders, celebrating timeless cultural heritage and festive splendor.',
     link: '/shop/sarees',
-    btnText: 'DISCOVER SAREES',
-    imageDesktop: '/images/cat_saree_hd.jpg',
-    imageMobile: '/images/cat_saree_hd.jpg',
-    objectPositionDesktop: 'center 15%',
-    objectPositionMobile: 'center 6%',
+    btnText: 'DISCOVER SET SAREES',
+    imageDesktop: '/images/hero_set_saree.jpg',
+    imageMobile: '/images/hero_set_saree.jpg',
+    objectPositionDesktop: 'center 20%',
+    objectPositionMobile: 'center 10%',
     scriptTop: 'Heritage',
-    scriptBottom: 'reimagined',
+    scriptBottom: 'WOVEN IN GOLD',
   },
   {
     id: 3,
-    tag: 'NEW ARRIVALS',
-    title: 'Contemporary Grace',
-    subtitle: 'Modern Silhouettes',
-    desc: 'Exquisite festive co-ord sets and velvet ensembles designed to make an unforgettable statement wherever you go.',
-    link: '/shop/coord-sets',
-    btnText: 'VIEW CO-ORDS',
-    imageDesktop: '/images/cat_coord_hd.jpg',
-    imageMobile: '/images/cat_coord_hd.jpg',
+    tag: "MEN'S TRADITION",
+    title: 'Classic Double Mundu',
+    subtitle: 'Royal Kasavu Heritage',
+    desc: 'Authentic Kerala Kasavu double mundu paired with tailored silk attire, crafted for weddings, temple festivities and auspicious celebrations.',
+    link: '/shop',
+    btnText: "EXPLORE MEN'S WEAR",
+    imageDesktop: '/images/hero_men_double_mundu.jpg',
+    imageMobile: '/images/hero_men_double_mundu.jpg',
     objectPositionDesktop: 'center 18%',
-    objectPositionMobile: 'center 8%',
-    scriptTop: 'Luxury',
-    scriptBottom: 'redefined',
+    objectPositionMobile: 'center 10%',
+    scriptTop: 'Tradition',
+    scriptBottom: 'TIMELESS ELEGANCE',
   },
 ];
 
@@ -231,6 +233,30 @@ export default function HomePage() {
     setCurrentSlideIndex((prev) => (prev === HERO_SLIDES.length - 1 ? 0 : prev + 1));
   };
 
+  // Mobile Touch Swipe Handling
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  const handleHeroTouchStart = (e: React.TouchEvent) => {
+    setTouchStartX(e.targetTouches[0].clientX);
+  };
+
+  const handleHeroTouchMove = (e: React.TouchEvent) => {
+    setTouchEndX(e.targetTouches[0].clientX);
+  };
+
+  const handleHeroTouchEnd = () => {
+    if (!touchStartX || !touchEndX) return;
+    const diff = touchStartX - touchEndX;
+    if (diff > 40) {
+      handleNextSlide();
+    } else if (diff < -40) {
+      handlePrevSlide();
+    }
+    setTouchStartX(null);
+    setTouchEndX(null);
+  };
+
   return (
     <div className="homepage-wrapper">
       {/* 1. HERO SECTION (PREMIUM DESKTOP & MOBILE PERFECTION) */}
@@ -327,16 +353,21 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* MOBILE LAYOUT (< 992px) */}
-          <div className="d-block d-lg-none pb-4">
-            {/* Mobile Visual Banner (Properly Framed with Full Headroom) */}
-            <div className="hero-mobile-image-wrapper mb-4">
+          {/* MOBILE LAYOUT (< 992px) - Touch Swipe Enabled & Highly Responsive */}
+          <div className="d-block d-lg-none pb-3">
+            {/* Mobile Visual Banner with Touch Swipe and Direct Controls */}
+            <div 
+              className="hero-mobile-image-wrapper mb-3 position-relative"
+              onTouchStart={handleHeroTouchStart}
+              onTouchMove={handleHeroTouchMove}
+              onTouchEnd={handleHeroTouchEnd}
+            >
               <Image
                 src={activeSlide.imageMobile}
                 alt={`${activeSlide.title} - IRA Lifestyle`}
                 fill
                 priority
-                sizes="100vw"
+                sizes="(max-width: 768px) 100vw, 50vw"
                 style={{ 
                   objectFit: 'cover', 
                   objectPosition: activeSlide.objectPositionMobile || 'center 8%' 
@@ -344,40 +375,40 @@ export default function HomePage() {
               />
 
               {/* Floating Script Accent on Mobile */}
-              <div className="hero-floating-script" style={{ top: '16px', right: '18px' }}>
-                <p className="script-title fs-3">{activeSlide.scriptTop}</p>
+              <div className="hero-floating-script">
+                <p className="script-title">{activeSlide.scriptTop}</p>
                 <span className="script-sub-uppercase">{activeSlide.scriptBottom}</span>
               </div>
             </div>
 
             {/* Mobile Content */}
-            <div className="text-center px-2">
-              <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
-                <span className="text-uppercase fw-semibold" style={{ fontSize: '0.75rem', letterSpacing: '0.2em', color: 'var(--gold-primary)' }}>
+            <div className="text-center px-1">
+              <div className="d-flex align-items-center justify-content-center gap-2 mb-1">
+                <span className="text-uppercase fw-semibold" style={{ fontSize: '0.7rem', letterSpacing: '0.2em', color: 'var(--gold-primary)' }}>
                   {activeSlide.tag}
                 </span>
               </div>
 
-              <h1 className="font-serif display-5 fw-normal text-dark mb-2 lh-sm">
+              <h1 className="font-serif fw-normal text-dark mb-1.5 lh-sm" style={{ fontSize: 'clamp(1.4rem, 5.2vw, 1.85rem)', letterSpacing: '-0.01em' }}>
                 {activeSlide.title} <br />
                 <span className="fst-italic" style={{ color: 'var(--gold-primary)' }}>{activeSlide.subtitle}</span>
               </h1>
 
-              <p className="text-muted mb-4 small" style={{ lineHeight: '1.6' }}>
+              <p className="text-muted mb-3 mx-auto" style={{ fontSize: '0.82rem', lineHeight: '1.55', maxWidth: '340px' }}>
                 {activeSlide.desc}
               </p>
 
-              <div className="d-flex justify-content-center gap-3 mb-4">
-                <Link href={activeSlide.link} className="btn-ira-gold w-100 py-3" style={{ maxWidth: '320px' }}>
-                  {activeSlide.btnText} <ArrowRight size={16} />
+              <div className="d-flex justify-content-center gap-2 mb-3">
+                <Link href={activeSlide.link} className="btn-ira-gold w-100 py-2.5" style={{ maxWidth: '300px', fontSize: '0.82rem', letterSpacing: '0.12em' }}>
+                  {activeSlide.btnText} <ArrowRight size={15} />
                 </Link>
               </div>
 
-              {/* Mobile Slide Navigation */}
-              <div className="d-flex align-items-center justify-content-center gap-3 text-muted" style={{ fontSize: '0.8rem', letterSpacing: '0.12em' }}>
+              {/* Mobile Slide Navigation Counter */}
+              <div className="d-flex align-items-center justify-content-center gap-2.5 text-muted mb-2" style={{ fontSize: '0.76rem', letterSpacing: '0.1em' }}>
                 <span className="fw-semibold text-dark">0{activeSlide.id} / 0{HERO_SLIDES.length}</span>
-                <span className="text-muted" style={{ width: '30px', height: '1px', backgroundColor: '#D8D1C5' }}></span>
-                <div className="d-flex gap-2">
+                <span className="text-muted" style={{ width: '25px', height: '1px', backgroundColor: '#D8D1C5' }}></span>
+                <div className="d-flex gap-1.5">
                   <button 
                     onClick={handlePrevSlide}
                     className="btn btn-sm btn-outline-secondary rounded-circle p-1 d-flex align-items-center justify-content-center"

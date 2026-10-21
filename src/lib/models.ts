@@ -180,3 +180,25 @@ const ReviewSchema = new Schema<IReviewDoc>({
 export const ReviewModel: Model<IReviewDoc> =
   mongoose.models.Review || mongoose.model<IReviewDoc>('Review', ReviewSchema);
 
+export interface ICategoryDoc extends Document {
+  id: string;
+  name: string;
+  slug: string;
+  image: string;
+  tagline: string;
+  itemCount: number;
+  createdAt: Date;
+}
+
+const CategorySchema = new Schema<ICategoryDoc>({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  slug: { type: String, required: true, unique: true },
+  image: { type: String, default: '/images/hero_set_saree.jpg' },
+  tagline: { type: String, default: '' },
+  itemCount: { type: Number, default: 0 },
+}, { timestamps: true });
+
+export const CategoryModel: Model<ICategoryDoc> =
+  mongoose.models.Category || mongoose.model<ICategoryDoc>('Category', CategorySchema);
+

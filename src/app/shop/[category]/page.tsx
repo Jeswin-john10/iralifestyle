@@ -15,14 +15,30 @@ function CategoryContent() {
   const params = useParams();
   const categorySlug = (params.category as string) || '';
   const { toggleWishlist, isInWishlist } = useCart();
+  const [categories, setCategories] = useState(CATEGORIES);
   const [products, setProducts] = useState<Product[]>(() =>
     INITIAL_PRODUCTS.filter((p) => p.category.toLowerCase() === categorySlug.toLowerCase())
   );
   const [loading, setLoading] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
-  const categoryMeta = CATEGORIES.find((c) => c.slug === categorySlug) || {
-    name: categorySlug.toUpperCase(),
+  useEffect(() => {
+    async function loadMeta() {
+      try {
+        const res = await fetch('/api/categories');
+        const data = await res.json();
+        if (data.categories && data.categories.length > 0) {
+          setCategories(data.categories);
+        }
+      } catch (err) {
+        console.error('Failed to load categories meta', err);
+      }
+    }
+    loadMeta();
+  }, []);
+
+  const categoryMeta = categories.find((c) => c.slug.toLowerCase() === categorySlug.toLowerCase()) || {
+    name: categorySlug.replace(/-/g, ' ').toUpperCase(),
     tagline: 'Timeless luxury and craftsmanship',
   };
 

@@ -7,44 +7,49 @@ import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const CATEGORY_ITEMS = [
   {
-    id: 'dresses',
-    label: 'WOMEN WEAR',
-    slug: 'dresses',
-    href: '/shop/dresses',
-    image: '/images/cat_dress.jpg',
-    tagline: 'Flowing regal anarkalis & handcrafted wedding couture',
+    id: 'davani',
+    label: 'DAVANI',
+    slug: 'davani-set',
+    href: '/shop/davani-set',
+    image: '/images/cat_davani.jpg',
+    tagline: 'Traditional Kerala dhavani half saree sets',
+    objectPosition: 'center top',
   },
   {
-    id: 'kurtis',
-    label: 'KURTI SET',
-    slug: 'kurtis',
-    href: '/shop/kurtis',
-    image: '/images/cat_kurti.jpg',
-    tagline: 'Timeless comfort woven with fine artisanal threads',
+    id: 'set-saree',
+    label: 'SET SAREE',
+    slug: 'set-saree',
+    href: '/shop/set-saree',
+    image: '/images/cat_set_saree.jpg',
+    tagline: 'Pure Kerala Kasavu golden border set sarees',
+    objectPosition: 'center top',
   },
   {
-    id: 'sarees',
-    label: 'SAREES',
-    slug: 'sarees',
-    href: '/shop/sarees',
-    image: '/images/cat_saree_v2.jpg',
-    tagline: 'Pure Kanjivaram & bridal silks with temple motifs',
+    id: 'set-mund',
+    label: 'SET MUND',
+    slug: 'set-mund',
+    href: '/shop/set-mund',
+    image: '/images/cat_set_mundu.jpg',
+    tagline: 'Authentic Kerala traditional two-piece set mundu',
+    objectPosition: 'center top',
   },
   {
-    id: 'co-ord-sets',
-    label: 'CO-ORD SETS',
-    slug: 'co-ord-sets',
-    href: '/shop/co-ord-sets',
-    image: '/images/cat_coord_v2.jpg',
-    tagline: 'Modern coordinated luxury & statement shararas',
+    id: 'churidar',
+    label: 'CHURIDAR',
+    slug: 'churidar-set',
+    href: '/shop/churidar-set',
+    image: '/images/cat_churidar.jpg',
+    tagline: 'Handcrafted churidar sets with fine artisanal dupattas',
+    objectPosition: 'center top',
   },
   {
-    id: 'new-arrivals',
-    label: 'NEW ARRIVALS',
-    slug: 'new-arrivals',
-    href: '/shop/new-arrivals',
-    image: '/images/cat_new_v2.jpg',
-    tagline: 'The fresh seasonal edit of contemporary Indian silhouettes',
+    id: 'mundu',
+    label: 'MUNDU',
+    slug: 'cream-double-mund',
+    href: '/shop/cream-double-mund',
+    image: '/images/cat_mundu.jpg',
+    tagline: 'Authentic Kerala Kasavu double mundu for men',
+    objectPosition: 'center top',
   },
 ];
 
@@ -232,7 +237,7 @@ export default function CategoryShowcase() {
                     alt={cat.label}
                     fill
                     sizes="230px"
-                    style={{ objectFit: 'cover', objectPosition: 'center top' }}
+                    style={{ objectFit: 'cover', objectPosition: cat.objectPosition || 'center top' }}
                     className="arch-img-zoom"
                   />
                 </div>
@@ -350,7 +355,7 @@ export default function CategoryShowcase() {
                       alt={cat.label}
                       fill
                       sizes="220px"
-                      style={{ objectFit: 'cover', objectPosition: 'center top' }}
+                      style={{ objectFit: 'cover', objectPosition: cat.objectPosition || 'center top' }}
                       priority={isCenter}
                     />
 
