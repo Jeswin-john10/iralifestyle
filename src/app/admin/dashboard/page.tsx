@@ -222,13 +222,19 @@ export default function AdminDashboardPage() {
   >('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<{ message: string; type?: 'success' | 'delete' | 'info' } | null>(null);
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    itemName: string;
+    details?: string;
+    onConfirm: () => Promise<void> | void;
+    loading?: boolean;
+  } | null>(null);
 
   // Security & Administrative Authentication
   const [isVerifyingAuth, setIsVerifyingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [inactivitySecondsLeft, setInactivitySecondsLeft] = useState<number | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
 
   // Data states
   const [products, setProducts] = useState<Product[]>([]);
@@ -246,7 +252,6 @@ export default function AdminDashboardPage() {
     name: '',
     slug: '',
     tagline: '',
-    image: '/images/hero_set_saree.jpg',
   });
 
   // Search & Filter
@@ -322,9 +327,11 @@ export default function AdminDashboardPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState('');
 
-  const showNotification = (msg: string) => {
-    setActionNotice(msg);
-    setTimeout(() => setActionNotice(null), 3500);
+  const showNotification = (msg: string, type: 'success' | 'delete' | 'info' = 'success') => {
+    setActionNotice({ message: msg, type });
+    setTimeout(() => {
+      setActionNotice((curr) => (curr?.message === msg ? null : curr));
+    }, 4000);
   };
 
   const loadData = async () => {
@@ -361,34 +368,64 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // 1. Verify Administrative Session on Mount
+  // 1. Permanent Administrative Session Check (Never auto-logout)
   useEffect(() => {
-    let isMounted = true;
-    const verifySession = async () => {
+    let hasLocalAuth = false;
+    if (typeof window !== 'undefined') {
       try {
-        const res = await fetch('/api/admin/login');
-        if (!res.ok) {
-          router.replace('/admin/ira/login?reason=unauthorized');
-          return;
+        const raw = localStorage.getItem('ira_admin_session');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.authenticated || parsed.role === 'admin')) {
+            hasLocalAuth = true;
+          }
         }
-        const data = await res.json();
-        if (data.authenticated && isMounted) {
-          setIsAuthenticated(true);
-          setIsVerifyingAuth(false);
-          loadData();
-        } else {
-          router.replace('/admin/ira/login?reason=unauthorized');
+      } catch {}
+    }
+
+    if (hasLocalAuth) {
+      setIsAuthenticated(true);
+      setIsVerifyingAuth(false);
+      loadData();
+      return;
+    }
+
+    // Check server session if local session is not yet loaded
+    const checkServerAuth = async () => {
+      try {
+        const res = await fetch('/api/admin/login', { 
+          cache: 'no-store',
+          credentials: 'include' 
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.authenticated || data.success) {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('ira_admin_session', JSON.stringify({
+                authenticated: true,
+                username: data.user?.username || 'admin@ira',
+                role: 'admin',
+                token: 'authenticated_admin_ira_2026',
+                timestamp: Date.now()
+              }));
+            }
+            setIsAuthenticated(true);
+            setIsVerifyingAuth(false);
+            loadData();
+            return;
+          }
         }
-      } catch {
-        router.replace('/admin/ira/login?reason=unauthorized');
+      } catch (err) {
+        console.warn('Server session check error:', err);
       }
+
+      // If neither local nor server session exists, redirect cleanly to login
+      setIsVerifyingAuth(false);
+      window.location.href = '/admin/ira/login';
     };
 
-    verifySession();
-    return () => {
-      isMounted = false;
-    };
-  }, [router]);
+    checkServerAuth();
+  }, []);
 
   // Clock Update Effect
   useEffect(() => {
@@ -406,50 +443,14 @@ export default function AdminDashboardPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // 2. 15-Minute Inactivity Auto-Logout Security Shield
-  const INACTIVITY_LIMIT_MS = 15 * 60 * 1000; // 15 mins
-  const WARNING_LIMIT_MS = 14 * 60 * 1000;    // 14 mins (1 min countdown warning)
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const resetTimer = () => {
-      lastActivityRef.current = Date.now();
-      setInactivitySecondsLeft(null);
-    };
-
-    const activityEvents = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
-    activityEvents.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
-
-    const checkInterval = setInterval(async () => {
-      const elapsed = Date.now() - lastActivityRef.current;
-
-      if (elapsed >= INACTIVITY_LIMIT_MS) {
-        clearInterval(checkInterval);
-        activityEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
-        try {
-          await fetch('/api/admin/login', { method: 'DELETE' });
-        } catch {}
-        router.replace('/admin/ira/login?reason=inactivity');
-      } else if (elapsed >= WARNING_LIMIT_MS) {
-        const remaining = Math.max(0, Math.ceil((INACTIVITY_LIMIT_MS - elapsed) / 1000));
-        setInactivitySecondsLeft(remaining);
-      } else {
-        setInactivitySecondsLeft(null);
-      }
-    }, 1000);
-
-    return () => {
-      clearInterval(checkInterval);
-      activityEvents.forEach((ev) => window.removeEventListener(ev, resetTimer));
-    };
-  }, [isAuthenticated, router]);
-
   const handleLogout = async () => {
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ira_admin_session');
+      }
       await fetch('/api/admin/login', { method: 'DELETE' });
     } catch {}
-    router.replace('/admin/ira/login');
+    window.location.href = '/admin/ira/login';
   };
 
   // Cloudflare R2 Upload
@@ -551,16 +552,29 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Product Delete
-  const handleDeleteProduct = async (id: string) => {
-    if (!confirm('Are you sure you wish to permanently delete this luxury piece?')) return;
-    try {
-      await fetch(`/api/products/${id}`, { method: 'DELETE' });
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-      showNotification('Product removed from catalog.');
-    } catch (err) {
-      console.error('Delete product error', err);
-    }
+  // Product Delete with Premium Confirmation
+  const handleDeleteProduct = (prodOrId: Product | string) => {
+    const prod = typeof prodOrId === 'string' ? products.find((p) => p.id === prodOrId) : prodOrId;
+    const prodId = typeof prodOrId === 'string' ? prodOrId : prodOrId.id;
+    const prodTitle = prod?.title || `Piece #${prodId}`;
+
+    setDeleteModal({
+      isOpen: true,
+      title: 'Delete Luxury Piece',
+      itemName: prodTitle,
+      details: prod ? `SKU: ${prod.id} • Category: ${prod.category} • ₹${prod.price.toLocaleString('en-IN')}` : `SKU / ID: ${prodId}`,
+      onConfirm: async () => {
+        try {
+          await fetch(`/api/products/${prodId}`, { method: 'DELETE' });
+          setProducts((prev) => prev.filter((p) => p.id !== prodId));
+          showNotification(`"${prodTitle}" removed from catalog.`, 'delete');
+        } catch (err) {
+          console.error('Delete product error', err);
+        } finally {
+          setDeleteModal(null);
+        }
+      },
+    });
   };
 
   // Category Create
@@ -579,7 +593,7 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (data.success && data.category) {
         setShowAddCatModal(false);
-        setNewCat({ name: '', slug: '', tagline: '', image: '/images/hero_set_saree.jpg' });
+        setNewCat({ name: '', slug: '', tagline: '' });
         setCategories((prev) => [...prev, data.category]);
         showNotification(`Category "${data.category.name}" added successfully!`);
       }
@@ -613,20 +627,28 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Category Delete
-  const handleDeleteCategory = async (cat: Category) => {
-    if (!confirm(`Are you sure you want to delete category "${cat.name}"? Products in this category may be affected.`)) return;
-
-    try {
-      const res = await fetch(`/api/categories?id=${cat.id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        setCategories((prev) => prev.filter((c) => c.id !== cat.id && c.slug !== cat.slug));
-        showNotification(`Category "${cat.name}" deleted.`);
-      }
-    } catch (err) {
-      console.error('Failed to delete category', err);
-    }
+  // Category Delete with Premium Confirmation
+  const handleDeleteCategory = (cat: Category) => {
+    setDeleteModal({
+      isOpen: true,
+      title: 'Delete Category Architecture',
+      itemName: cat.name,
+      details: `URL Slug: /shop/${cat.slug} • Storefront filters and dropdowns will be unlinked.`,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/categories?id=${cat.id}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            setCategories((prev) => prev.filter((c) => c.id !== cat.id && c.slug !== cat.slug));
+            showNotification(`Category "${cat.name}" deleted.`, 'delete');
+          }
+        } catch (err) {
+          console.error('Failed to delete category', err);
+        } finally {
+          setDeleteModal(null);
+        }
+      },
+    });
   };
 
   const filteredCategories = useMemo(() => {
@@ -660,64 +682,103 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Order Delete
-  const handleDeleteOrder = async (orderId: string) => {
-    if (!confirm(`Delete order #${orderId}? This cannot be undone.`)) return;
-    try {
-      const res = await fetch(`/api/orders?orderId=${orderId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        setOrders((prev) => prev.filter((o) => o.orderId !== orderId));
-        showNotification(`Order #${orderId} deleted.`);
-      }
-    } catch (err) {
-      console.error('Failed to delete order', err);
-    }
+  // Order Delete with Premium Confirmation
+  const handleDeleteOrder = (orderId: string) => {
+    const ord = orders.find((o) => o.orderId === orderId);
+    setDeleteModal({
+      isOpen: true,
+      title: 'Delete Order Record',
+      itemName: `Order #${orderId}`,
+      details: ord?.customer?.fullName ? `Customer: ${ord.customer.fullName} • ₹${ord.total?.toLocaleString('en-IN')} • Status: ${ord.orderStatus}` : `Order #${orderId} will be permanently removed.`,
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/orders?orderId=${orderId}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            setOrders((prev) => prev.filter((o) => o.orderId !== orderId));
+            showNotification(`Order #${orderId} deleted.`, 'delete');
+          }
+        } catch (err) {
+          console.error('Failed to delete order', err);
+        } finally {
+          setDeleteModal(null);
+        }
+      },
+    });
   };
 
-  // Contact Inquiries Delete
-  const handleDeleteInquiry = async (id: string) => {
-    if (!confirm('Delete this customer inquiry?')) return;
-    try {
-      const res = await fetch(`/api/inquiries?id=${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        setInquiries((prev) => prev.filter((inq) => inq._id !== id));
-        showNotification('Inquiry deleted.');
-      }
-    } catch (err) {
-      console.error('Failed to delete inquiry', err);
-    }
+  // Contact Inquiries Delete with Premium Confirmation
+  const handleDeleteInquiry = (id: string) => {
+    const inq = inquiries.find((i) => i._id === id);
+    setDeleteModal({
+      isOpen: true,
+      title: 'Delete Customer Inquiry',
+      itemName: inq ? `Inquiry from ${inq.name}` : 'Customer Inquiry',
+      details: inq?.email ? `Email: ${inq.email} • Subject: ${inq.subject || 'Bespoke Order Request'}` : 'This message will be removed.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/inquiries?id=${id}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            setInquiries((prev) => prev.filter((item) => item._id !== id));
+            showNotification('Inquiry deleted.', 'delete');
+          }
+        } catch (err) {
+          console.error('Failed to delete inquiry', err);
+        } finally {
+          setDeleteModal(null);
+        }
+      },
+    });
   };
 
-  // Newsletter Subscriber Delete
-  const handleDeleteSubscriber = async (email: string) => {
-    if (!confirm(`Remove subscriber ${email}?`)) return;
-    try {
-      const res = await fetch(`/api/newsletter?email=${encodeURIComponent(email)}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        setSubscribers((prev) => prev.filter((s) => s.email !== email));
-        showNotification(`Subscriber ${email} removed.`);
-      }
-    } catch (err) {
-      console.error('Failed to delete subscriber', err);
-    }
+  // Newsletter Subscriber Delete with Premium Confirmation
+  const handleDeleteSubscriber = (email: string) => {
+    setDeleteModal({
+      isOpen: true,
+      title: 'Remove VIP Subscriber',
+      itemName: email,
+      details: 'This subscriber will no longer receive collection drops or newsletters.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/newsletter?email=${encodeURIComponent(email)}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            setSubscribers((prev) => prev.filter((s) => s.email !== email));
+            showNotification(`Subscriber ${email} removed.`, 'delete');
+          }
+        } catch (err) {
+          console.error('Failed to delete subscriber', err);
+        } finally {
+          setDeleteModal(null);
+        }
+      },
+    });
   };
 
-  // Review Actions
-  const handleDeleteReview = async (id: string) => {
-    if (!confirm('Are you sure you wish to delete this customer review?')) return;
-    try {
-      const res = await fetch(`/api/reviews?id=${id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (data.success) {
-        setReviews((prev) => prev.filter((r) => r._id !== id));
-        showNotification('Review removed successfully.');
-      }
-    } catch (err) {
-      console.error('Failed to delete review', err);
-    }
+  // Review Actions with Premium Confirmation
+  const handleDeleteReview = (id: string) => {
+    const rev = reviews.find((r) => (r._id || r.id) === id);
+    setDeleteModal({
+      isOpen: true,
+      title: 'Delete Customer Review',
+      itemName: rev ? `Review by ${rev.customerName}` : 'Customer Review',
+      details: rev?.productTitle ? `Product: ${rev.productTitle} • Rating: ${rev.rating}★` : 'Ratings and reviews will recalculate in real-time.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/reviews?id=${id}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            setReviews((prev) => prev.filter((r) => (r._id || r.id) !== id));
+            showNotification('Review removed successfully.', 'delete');
+          }
+        } catch (err) {
+          console.error('Failed to delete review', err);
+        } finally {
+          setDeleteModal(null);
+        }
+      },
+    });
   };
 
   const handleToggleReviewStatus = async (id: string, currentStatus?: string) => {
@@ -767,13 +828,22 @@ export default function AdminDashboardPage() {
     [orders]
   );
 
+  // Delivered Orders Revenue (Total revenue from completed & delivered orders)
+  const deliveredRevenue = useMemo(
+    () =>
+      orders
+        .filter((o) => (o.orderStatus || '').toLowerCase() === 'delivered')
+        .reduce((sum, o) => sum + (o.total || 0), 0),
+    [orders]
+  );
+
   const pendingOrdersCount = useMemo(
-    () => orders.filter((o) => o.orderStatus === 'Pending').length,
+    () => orders.filter((o) => (o.orderStatus || '').toLowerCase() === 'pending').length,
     [orders]
   );
 
   const deliveredOrdersCount = useMemo(
-    () => orders.filter((o) => o.orderStatus === 'Delivered').length,
+    () => orders.filter((o) => (o.orderStatus || '').toLowerCase() === 'delivered').length,
     [orders]
   );
 
@@ -883,58 +953,105 @@ export default function AdminDashboardPage() {
     return { total, slices };
   }, [products]);
 
-  // Animated Selling Report Data (Monthly / Daily toggle)
-  const salesTrendData = useMemo(() => {
-    if (salesChartPeriod === 'monthly') {
-      const months: { key: string; label: string; revenue: number; orders: number }[] = [];
-      const now = new Date();
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('en-US', { month: 'short' });
-        months.push({ key, label, revenue: 0, orders: 0 });
-      }
+  // Order Status Breakdown Distribution (Delivered, Confirmed, Shipped, Processing, Pending, Cancelled)
+  const orderStatusDistribution = useMemo(() => {
+    const statuses = [
+      { key: 'Delivered', label: 'Delivered', color: '#10B981', gradStart: '#10B981', gradEnd: '#047857', badgeBg: 'rgba(16, 185, 129, 0.12)', badgeText: '#047857' },
+      { key: 'Confirmed', label: 'Confirmed', color: '#8C6538', gradStart: '#C5A880', gradEnd: '#8C6538', badgeBg: 'rgba(140, 101, 56, 0.12)', badgeText: '#8C6538' },
+      { key: 'Shipped', label: 'Shipped', color: '#2563EB', gradStart: '#60A5FA', gradEnd: '#1D4ED8', badgeBg: 'rgba(37, 99, 235, 0.12)', badgeText: '#1D4ED8' },
+      { key: 'Processing', label: 'Processing', color: '#7C3AED', gradStart: '#A78BFA', gradEnd: '#6D28D9', badgeBg: 'rgba(124, 58, 237, 0.12)', badgeText: '#6D28D9' },
+      { key: 'Pending', label: 'Pending', color: '#D97706', gradStart: '#FBBF24', gradEnd: '#B45309', badgeBg: 'rgba(217, 119, 6, 0.12)', badgeText: '#B45309' },
+      { key: 'Cancelled', label: 'Cancelled', color: '#DC2626', gradStart: '#F87171', gradEnd: '#B91C1C', badgeBg: 'rgba(220, 38, 38, 0.12)', badgeText: '#B91C1C' },
+    ];
 
-      orders.forEach((o) => {
-        const orderDate = new Date(o.createdAt || Date.now());
-        const key = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, '0')}`;
-        const match = months.find((m) => m.key === key);
-        if (match) {
-          match.revenue += Number(o.total || 0);
-          match.orders += 1;
+    const list = statuses.map((st) => {
+      const matched = orders.filter(
+        (o) => (o.orderStatus || '').toLowerCase() === st.key.toLowerCase()
+      );
+      const count = matched.length;
+      const revenue = matched.reduce((sum, o) => sum + Number(o.total || 0), 0);
+      return {
+        ...st,
+        count,
+        revenue,
+      };
+    });
+
+    const maxCount = Math.max(...list.map((s) => s.count), 1);
+    const deliveredItem = list.find((s) => s.key === 'Delivered');
+
+    return {
+      list,
+      totalOrders: orders.length,
+      maxCount,
+      deliveredRevenue: deliveredItem?.revenue || 0,
+    };
+  }, [orders]);
+
+  // Top 5 Trending / Most Selling Products Calculation (Ranked by units sold, then revenue)
+  const topSellingProducts = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        id: string;
+        title: string;
+        category: string;
+        price: number;
+        image: string;
+        unitsSold: number;
+        revenue: number;
+        ordersCount: number;
+      }
+    > = {};
+
+    // Seed from catalog products
+    products.forEach((p) => {
+      map[p.id] = {
+        id: p.id,
+        title: p.title,
+        category: p.categoryLabel || p.category || 'Atelier',
+        price: Number(p.price) || 0,
+        image: p.image || '/images/cat_dress.jpg',
+        unitsSold: 0,
+        revenue: 0,
+        ordersCount: 0,
+      };
+    });
+
+    // Aggregate from orders
+    orders.forEach((o) => {
+      (o.items || []).forEach((item) => {
+        const id = item.productId;
+        const qty = Number(item.quantity) || 1;
+        const pr = Number(item.price) || 0;
+        if (id && map[id]) {
+          map[id].unitsSold += qty;
+          map[id].revenue += pr * qty;
+          map[id].ordersCount += 1;
+        } else if (id) {
+          map[id] = {
+            id,
+            title: item.title || 'Luxury Piece',
+            category: 'Atelier',
+            price: pr,
+            image: item.image || '/images/cat_dress.jpg',
+            unitsSold: qty,
+            revenue: pr * qty,
+            ordersCount: 1,
+          };
         }
       });
+    });
 
-      const totalPeriodRevenue = months.reduce((sum, m) => sum + m.revenue, 0);
-      const maxRevenue = Math.max(...months.map((m) => m.revenue), 5000);
-
-      return { list: months, totalPeriodRevenue, maxRevenue };
-    } else {
-      const days: { key: string; label: string; revenue: number; orders: number }[] = [];
-      const now = new Date();
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-        const key = d.toISOString().slice(0, 10);
-        const label = d.toLocaleDateString('en-US', { weekday: 'short' });
-        days.push({ key, label, revenue: 0, orders: 0 });
-      }
-
-      orders.forEach((o) => {
-        const orderDate = new Date(o.createdAt || Date.now());
-        const key = orderDate.toISOString().slice(0, 10);
-        const match = days.find((d) => d.key === key);
-        if (match) {
-          match.revenue += Number(o.total || 0);
-          match.orders += 1;
-        }
-      });
-
-      const totalPeriodRevenue = days.reduce((sum, d) => sum + d.revenue, 0);
-      const maxRevenue = Math.max(...days.map((d) => d.revenue), 2000);
-
-      return { list: days, totalPeriodRevenue, maxRevenue };
-    }
-  }, [orders, salesChartPeriod]);
+    // Sort by unitsSold desc, then revenue desc, then price desc
+    return Object.values(map)
+      .sort((a, b) => {
+        if (b.unitsSold !== a.unitsSold) return b.unitsSold - a.unitsSold;
+        if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+        return b.price - a.price;
+      })
+      .slice(0, 5);
+  }, [products, orders]);
 
   // Periodic Reporting (Date-wise, Month-wise, Year-wise, Custom Range)
   const reportBreakdown = useMemo(() => {
@@ -1398,44 +1515,226 @@ export default function AdminDashboardPage() {
 
   return (
     <div style={{ backgroundColor: '#F8F6F0', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Inactivity Security Warning Toast */}
-      {inactivitySecondsLeft !== null && (
-        <div 
-          className="position-fixed top-0 start-50 translate-middle-x mt-3 shadow-lg rounded-pill px-4 py-2 d-flex align-items-center gap-3"
+
+
+      {/* ================= PREMIUM ATELIER TOAST NOTIFICATION ================= */}
+      {actionNotice && (
+        <div
+          className="position-fixed top-0 end-0 m-3 m-md-4 shadow-2xl d-flex align-items-center gap-3 p-3 transition"
           style={{
-            zIndex: 9999,
-            backgroundColor: '#2A1B0E',
-            border: '1px solid #EAB308',
-            color: '#FEF08A',
-            fontSize: '0.84rem',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+            zIndex: 99999,
+            minWidth: '320px',
+            maxWidth: '460px',
+            backgroundColor: 'rgba(22, 19, 17, 0.96)',
+            backdropFilter: 'blur(16px)',
+            border: actionNotice.type === 'delete'
+              ? '1px solid rgba(220, 38, 38, 0.55)'
+              : '1px solid rgba(197, 168, 128, 0.5)',
+            borderRadius: '12px',
+            boxShadow: actionNotice.type === 'delete'
+              ? '0 16px 38px rgba(0, 0, 0, 0.5), 0 0 20px rgba(220, 38, 38, 0.25)'
+              : '0 16px 38px rgba(0, 0, 0, 0.5), 0 0 20px rgba(197, 168, 128, 0.22)',
           }}
         >
-          <ShieldAlert size={18} color="#FACC15" className="flex-shrink-0" />
-          <span>
-            <strong>Security Notice:</strong> Auto-logout in <strong>{inactivitySecondsLeft}s</strong> due to inactivity
-          </span>
-          <button
-            onClick={() => {
-              lastActivityRef.current = Date.now();
-              setInactivitySecondsLeft(null);
+          <div
+            className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+            style={{
+              width: '38px',
+              height: '38px',
+              backgroundColor: actionNotice.type === 'delete' ? 'rgba(220, 38, 38, 0.16)' : 'rgba(197, 168, 128, 0.18)',
+              border: actionNotice.type === 'delete' ? '1px solid rgba(220, 38, 38, 0.45)' : '1px solid rgba(197, 168, 128, 0.45)',
             }}
-            className="btn btn-sm btn-warning fw-bold rounded-pill px-3 py-1 text-dark"
-            style={{ fontSize: '0.74rem' }}
           >
-            Stay Signed In
+            {actionNotice.type === 'delete' ? (
+              <Trash2 size={18} color="#F87171" />
+            ) : (
+              <CheckCircle2 size={18} color="#D4AF77" />
+            )}
+          </div>
+          <div className="flex-grow-1 pe-2">
+            <div
+              className="d-flex align-items-center gap-1.5 small fw-bold text-uppercase"
+              style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.12em',
+                color: actionNotice.type === 'delete' ? '#F87171' : '#D4AF77',
+              }}
+            >
+              <span>{actionNotice.type === 'delete' ? 'Action Completed' : 'IRA Atelier Console'}</span>
+              <span>•</span>
+              <span>Live Synced</span>
+            </div>
+            <div className="text-white small fw-medium mt-0.5" style={{ fontSize: '0.86rem', lineHeight: 1.35 }}>
+              {actionNotice.message}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionNotice(null)}
+            className="btn btn-sm btn-link p-1 text-muted text-decoration-none"
+            style={{ color: '#A8A29E', opacity: 0.7 }}
+            aria-label="Dismiss notification"
+          >
+            <X size={16} />
           </button>
         </div>
       )}
 
-      {/* Toast Notification */}
-      {actionNotice && (
-        <div 
-          className="position-fixed top-0 start-50 translate-middle-x mt-3 px-4 py-2 rounded-pill shadow-lg text-white d-flex align-items-center gap-2"
-          style={{ backgroundColor: '#1A1816', zIndex: 9999, border: '1px solid #C5A880', fontSize: '0.85rem' }}
+      {/* ================= PREMIUM ATELIER DELETE CONFIRMATION MODAL ================= */}
+      {deleteModal && (
+        <div
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+          style={{
+            backgroundColor: 'rgba(14, 11, 9, 0.82)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 99990,
+          }}
+          onClick={() => {
+            if (!deleteModal.loading) setDeleteModal(null);
+          }}
         >
-          <CheckCircle2 size={16} color="#C5A880" />
-          <span>{actionNotice}</span>
+          <div
+            className="rounded-4 p-4 p-md-5 w-100 position-relative shadow-2xl"
+            style={{
+              maxWidth: '480px',
+              backgroundColor: '#1C1815',
+              backgroundImage: 'radial-gradient(circle at 50% 0%, rgba(220, 38, 38, 0.12) 0%, rgba(28, 24, 21, 0.98) 75%)',
+              border: '1px solid rgba(220, 38, 38, 0.35)',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.7), 0 0 25px rgba(220, 38, 38, 0.15)',
+              color: '#FAF7F2',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top Close Button */}
+            <button
+              type="button"
+              disabled={deleteModal.loading}
+              onClick={() => setDeleteModal(null)}
+              className="btn btn-sm position-absolute top-0 end-0 m-3 p-1.5 text-muted hover:text-white"
+              style={{ color: '#9CA3AF', background: 'transparent', border: 'none' }}
+              aria-label="Close modal"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Glowing Icon Badge */}
+            <div className="d-flex align-items-center justify-content-center mb-3.5">
+              <div
+                className="rounded-circle d-flex align-items-center justify-content-center shadow-lg"
+                style={{
+                  width: '64px',
+                  height: '64px',
+                  backgroundColor: 'rgba(220, 38, 38, 0.15)',
+                  border: '1px solid rgba(220, 38, 38, 0.45)',
+                  boxShadow: '0 0 24px rgba(220, 38, 38, 0.25)',
+                }}
+              >
+                <Trash2 size={28} color="#EF4444" />
+              </div>
+            </div>
+
+            {/* Modal Title & Subtitle */}
+            <div className="text-center mb-3">
+              <span
+                className="text-uppercase small fw-bold px-2.5 py-0.5 rounded-pill mb-2 d-inline-block"
+                style={{
+                  backgroundColor: 'rgba(220, 38, 38, 0.18)',
+                  color: '#F87171',
+                  border: '1px solid rgba(220, 38, 38, 0.35)',
+                  fontSize: '0.68rem',
+                  letterSpacing: '0.12em',
+                }}
+              >
+                Permanent Deletion
+              </span>
+              <h5 className="font-serif fw-bold text-white mb-1.5" style={{ letterSpacing: '0.02em', fontSize: '1.25rem' }}>
+                {deleteModal.title}
+              </h5>
+              <p className="small mb-0" style={{ color: '#D6D3D1', fontSize: '0.86rem' }}>
+                Are you sure you want to delete <span className="fw-semibold text-white">"{deleteModal.itemName}"</span>?
+              </p>
+            </div>
+
+            {/* Item Details Box */}
+            {deleteModal.details && (
+              <div
+                className="rounded-3 p-3 mb-4 text-center"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(197, 168, 128, 0.2)',
+                  fontSize: '0.82rem',
+                  color: '#C5A880',
+                }}
+              >
+                {deleteModal.details}
+              </div>
+            )}
+
+            {/* Warning Message */}
+            <div
+              className="d-flex align-items-center gap-2 p-2.5 rounded-3 mb-4 text-start"
+              style={{
+                backgroundColor: 'rgba(220, 38, 38, 0.08)',
+                border: '1px solid rgba(220, 38, 38, 0.25)',
+                fontSize: '0.78rem',
+                color: '#FCA5A5',
+              }}
+            >
+              <ShieldAlert size={16} className="flex-shrink-0" color="#F87171" />
+              <span>This administrative action is irreversible. All linked records will be updated immediately.</span>
+            </div>
+
+            {/* Actions: Cancel vs Delete */}
+            <div className="d-flex align-items-center justify-content-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={deleteModal.loading}
+                onClick={() => setDeleteModal(null)}
+                className="btn px-4 py-2 text-white border-0"
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  borderRadius: '8px',
+                  fontSize: '0.86rem',
+                  fontWeight: 500,
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteModal.loading}
+                onClick={async () => {
+                  setDeleteModal((prev) => prev ? { ...prev, loading: true } : null);
+                  try {
+                    await deleteModal.onConfirm();
+                  } catch (err) {
+                    console.error('Delete confirm error:', err);
+                  }
+                }}
+                className="btn px-4 py-2 text-white d-flex align-items-center gap-2 fw-semibold"
+                style={{
+                  background: 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)',
+                  border: '1px solid #EF4444',
+                  borderRadius: '8px',
+                  fontSize: '0.86rem',
+                  boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
+                }}
+              >
+                {deleteModal.loading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1524,113 +1823,8 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
 
-        {/* Center: Interactive Quick Links (Tablet & Desktop) */}
-        <div className="d-none d-md-flex align-items-center gap-2">
-          {/* Visit Live Store Link */}
-          <Link
-            href="/"
-            target="_blank"
-            className="btn btn-sm rounded-pill d-flex align-items-center gap-1.5 px-3 py-1.5 text-decoration-none"
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              color: '#FAF7F2',
-              border: '1px solid rgba(197, 168, 128, 0.3)',
-              fontSize: '0.75rem',
-              transition: 'all 0.2s ease',
-            }}
-            title="Preview customer storefront in a new tab"
-          >
-            <ExternalLink size={12} color="#C5A880" />
-            <span>Storefront</span>
-          </Link>
-
-          {/* Sync / Refresh Data Button */}
-          <button
-            onClick={loadData}
-            className="btn btn-sm rounded-pill d-flex align-items-center gap-1.5 px-3 py-1.5"
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              color: '#FAF7F2',
-              border: '1px solid rgba(197, 168, 128, 0.3)',
-              fontSize: '0.75rem',
-              transition: 'all 0.2s ease',
-            }}
-            title="Reload latest orders, inquiries, and reviews"
-          >
-            <RefreshCw 
-              size={12} 
-              color="#C5A880" 
-              style={{
-                animation: loading ? 'iraSpin 1s linear infinite' : 'none',
-                transition: 'transform 0.3s ease'
-              }} 
-            />
-            <span>{loading ? 'Syncing...' : 'Sync Data'}</span>
-          </button>
-
-          {/* Live Studio IST Clock */}
-          {headerTime && (
-            <div 
-              className="d-none d-lg-flex align-items-center gap-1.5 px-2.5 py-1.5 rounded-pill"
-              style={{
-                backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                border: '1px solid rgba(197, 168, 128, 0.2)',
-                fontSize: '0.72rem',
-                color: '#D4C3A3',
-              }}
-              title="Atelier Local Time (IST)"
-            >
-              <Clock size={12} color="#C5A880" />
-              <span>{headerTime} IST</span>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Quick Add + Notification Shortcuts + Admin Profile + Logout */}
+        {/* Right: Admin Profile + Logout */}
         <div className="d-flex align-items-center gap-1.5 gap-sm-2 gap-md-2.5">
-          {/* Quick Action: New Garment (Hidden on mobile screen) */}
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="btn btn-sm rounded-pill fw-semibold d-none d-sm-flex align-items-center gap-1 px-2.5 px-sm-3 py-1.5 shadow-sm"
-            style={{
-              background: 'linear-gradient(135deg, #C5A880 0%, #B8966C 100%)',
-              color: '#151311',
-              border: '1px solid rgba(197, 168, 128, 0.6)',
-              fontSize: '0.76rem',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.2s ease',
-            }}
-            title="Create and publish new luxury garment"
-          >
-            <Plus size={14} />
-            <span>New Garment</span>
-          </button>
-
-          {/* Quick Inquiries Bell / Mail */}
-          <button
-            onClick={() => setActiveTab('inquiries')}
-            className="btn btn-sm d-flex align-items-center justify-content-center position-relative rounded-circle"
-            style={{
-              width: '36px',
-              height: '36px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(197, 168, 128, 0.3)',
-              color: '#C5A880',
-              padding: 0,
-              transition: 'all 0.2s ease',
-            }}
-            title="Client Inquiries & Direct Messages"
-          >
-            <Mail size={15} />
-            {inquiries.length > 0 && (
-              <span 
-                className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-dark"
-                style={{ fontSize: '0.58rem', padding: '2px 5px' }}
-              >
-                {inquiries.length}
-              </span>
-            )}
-          </button>
 
           {/* Admin Profile Chip (Desktop) */}
           <div 
@@ -2023,15 +2217,20 @@ export default function AdminDashboardPage() {
                 <div className="col-12 col-sm-6 col-xl-3">
                   <div className="bg-white p-3 p-md-4 rounded-3 border shadow-sm h-100">
                     <div className="d-flex justify-content-between align-items-center text-muted mb-2">
-                      <span className="small text-uppercase fw-semibold" style={{ fontSize: '0.72rem' }}>Total Sales (INR)</span>
+                      <span className="small text-uppercase fw-semibold" style={{ fontSize: '0.72rem' }}>Total Sales (Delivered)</span>
                       <div className="p-2 rounded-circle" style={{ backgroundColor: 'rgba(197, 168, 128, 0.15)' }}>
                         <DollarSign size={20} color="#9E7D47" />
                       </div>
                     </div>
                     <h3 className="fw-bold mb-1" style={{ color: '#9E7D47' }}>
-                      ₹{totalRevenue.toLocaleString('en-IN')}
+                      ₹{deliveredRevenue.toLocaleString('en-IN')}
                     </h3>
-                    <small className="text-muted">Direct boutique revenue</small>
+                    <div className="d-flex align-items-center justify-content-between mt-1">
+                      <small className="text-muted">Delivered orders revenue</small>
+                      <span className="badge bg-light text-muted border" style={{ fontSize: '0.7rem' }}>
+                        All orders: ₹{totalRevenue.toLocaleString('en-IN')}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -2082,114 +2281,102 @@ export default function AdminDashboardPage() {
 
               {/* ================= CHARTS ROW: SALES TREND & CATEGORY PIE (WHITE, BLACK, BROWN & GREY PALETTE) ================= */}
               <div className="row g-4 mb-4">
-                {/* 1. Animated Selling Report / Sales Revenue Chart */}
+                {/* 1. Order Status & Fulfillment Distribution Chart */}
                 <div className="col-12 col-xl-7">
                   <div className="bg-white rounded-3 border shadow-sm p-4 h-100 d-flex flex-column" style={{ borderColor: '#EAE4DC' }}>
                     <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                       <div>
                         <div className="d-flex align-items-center gap-2">
                           <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(140, 101, 56, 0.12)', color: '#8C6538' }}>
-                            <TrendingUp size={18} />
+                            <ShoppingBag size={18} />
                           </div>
-                          <h5 className="fw-bold text-dark mb-0 font-serif">Selling Performance Report</h5>
+                          <h5 className="fw-bold text-dark mb-0 font-serif">Order Status & Fulfillment Distribution</h5>
                         </div>
                         <small className="text-muted">
-                          {salesChartPeriod === 'monthly' ? 'Monthly sales volume & revenue progression' : 'Last 7 days daily order checkout trends'}
+                          Real-time breakdown of Delivered, Confirmed, Shipped, Processing, Pending & Cancelled orders
                         </small>
                       </div>
 
-                      <div className="btn-group btn-group-sm" role="group">
-                        <button
-                          type="button"
-                          onClick={() => setSalesChartPeriod('monthly')}
-                          className={`btn ${salesChartPeriod === 'monthly' ? 'btn-dark' : 'btn-outline-secondary'}`}
-                          style={{
-                            fontSize: '0.74rem',
-                            backgroundColor: salesChartPeriod === 'monthly' ? '#1A1816' : 'transparent',
-                            borderColor: '#D8D1C7',
-                          }}
-                        >
-                          Monthly
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSalesChartPeriod('daily')}
-                          className={`btn ${salesChartPeriod === 'daily' ? 'btn-dark' : 'btn-outline-secondary'}`}
-                          style={{
-                            fontSize: '0.74rem',
-                            backgroundColor: salesChartPeriod === 'daily' ? '#1A1816' : 'transparent',
-                            borderColor: '#D8D1C7',
-                          }}
-                        >
-                          Daily
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('orders')}
+                        className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1.5 px-3 py-1 shadow-sm"
+                        style={{ fontSize: '0.74rem', borderColor: '#D8D1C7', color: '#1A1816' }}
+                      >
+                        <span>Manage Orders</span>
+                        <ExternalLink size={12} />
+                      </button>
                     </div>
 
                     {/* Chart Header Metrics Card */}
-                    <div className="d-flex align-items-baseline gap-3 mb-3 p-2.5 rounded border" style={{ backgroundColor: '#FAF8F4', borderColor: '#E8E2D8' }}>
+                    <div className="d-flex flex-wrap align-items-center gap-3 mb-3 p-2.5 rounded border" style={{ backgroundColor: '#FAF8F4', borderColor: '#E8E2D8' }}>
                       <div>
                         <small className="text-muted d-block text-uppercase" style={{ fontSize: '0.68rem', letterSpacing: '0.04em' }}>
-                          Period Sales
+                          Total Orders
                         </small>
-                        <span className="fw-bold fs-5" style={{ color: '#8C6538' }}>
-                          ₹{salesTrendData.totalPeriodRevenue.toLocaleString('en-IN')}
+                        <span className="fw-bold fs-5 text-dark">
+                          {orders.length}
                         </span>
                       </div>
-                      <div className="vr" style={{ borderColor: '#DFD8CC' }} />
+                      <div className="vr d-none d-sm-block" style={{ borderColor: '#DFD8CC' }} />
                       <div>
                         <small className="text-muted d-block text-uppercase" style={{ fontSize: '0.68rem', letterSpacing: '0.04em' }}>
-                          Avg Per {salesChartPeriod === 'monthly' ? 'Month' : 'Day'}
+                          Delivered Revenue
+                        </small>
+                        <span className="fw-bold fs-6" style={{ color: '#059669' }}>
+                          ₹{orderStatusDistribution.deliveredRevenue.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <div className="vr d-none d-sm-block" style={{ borderColor: '#DFD8CC' }} />
+                      <div>
+                        <small className="text-muted d-block text-uppercase" style={{ fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+                          Active Pipeline
                         </small>
                         <span className="fw-bold fs-6 text-dark">
-                          ₹{Math.round(salesTrendData.totalPeriodRevenue / (salesTrendData.list.length || 1)).toLocaleString('en-IN')}
+                          {orders.filter((o) => ['confirmed', 'shipped', 'processing', 'pending'].includes((o.orderStatus || '').toLowerCase())).length} orders
                         </span>
                       </div>
-                      <div className="ms-auto d-none d-sm-block">
+                      <div className="ms-auto d-none d-md-block">
                         <span className="badge px-2.5 py-1" style={{ backgroundColor: '#1A1816', color: '#C5A880', fontSize: '0.7rem', border: '1px solid rgba(197, 168, 128, 0.4)' }}>
                           ✓ Live WhatsApp Orders
                         </span>
                       </div>
                     </div>
 
-                    {/* Animated SVG Bar Chart with Onyx Black & Bronze Gradient */}
+                    {/* SVG Status Bar Chart */}
                     <div className="position-relative flex-grow-1 d-flex flex-column justify-content-end" style={{ minHeight: '210px' }}>
-                      <svg width="100%" height="190" viewBox="0 0 600 190" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                      <svg width="100%" height="205" viewBox="0 0 600 205" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
                         <defs>
-                          {/* Default bar: Bronze to Dark Onyx Black */}
-                          <linearGradient id="luxuryBarGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#8C6538" stopOpacity="1" />
-                            <stop offset="100%" stopColor="#1A1816" stopOpacity="0.95" />
-                          </linearGradient>
-                          {/* Hover bar: Champagne Gold to Rich Bronze */}
-                          <linearGradient id="luxuryBarHover" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#C5A880" stopOpacity="1" />
-                            <stop offset="100%" stopColor="#8C6538" stopOpacity="1" />
-                          </linearGradient>
+                          {orderStatusDistribution.list.map((st) => (
+                            <linearGradient key={`grad_${st.key}`} id={`statusGrad_${st.key}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={st.gradStart} stopOpacity="1" />
+                              <stop offset="100%" stopColor={st.gradEnd} stopOpacity="0.95" />
+                            </linearGradient>
+                          ))}
                         </defs>
 
                         {/* Horizontal reference grid lines */}
                         <line x1="0" y1="20" x2="600" y2="20" stroke="#F0EBE1" strokeDasharray="4 4" strokeWidth="1" />
-                        <line x1="0" y1="80" x2="600" y2="80" stroke="#F0EBE1" strokeDasharray="4 4" strokeWidth="1" />
-                        <line x1="0" y1="140" x2="600" y2="140" stroke="#DFD7CC" strokeWidth="1" />
+                        <line x1="0" y1="75" x2="600" y2="75" stroke="#F0EBE1" strokeDasharray="4 4" strokeWidth="1" />
+                        <line x1="0" y1="130" x2="600" y2="130" stroke="#DFD7CC" strokeWidth="1" />
 
-                        {/* Bars */}
-                        {salesTrendData.list.map((item, idx) => {
-                          const totalBars = salesTrendData.list.length;
-                          const barWidth = Math.min(50, (500 / totalBars) * 0.65);
+                        {/* Status Bars */}
+                        {orderStatusDistribution.list.map((item, idx) => {
+                          const totalBars = orderStatusDistribution.list.length;
                           const gap = 600 / totalBars;
+                          const barWidth = 52;
                           const x = idx * gap + (gap - barWidth) / 2;
-                          const hasSales = item.revenue > 0;
-                          const barHeight = hasSales 
-                            ? Math.max(16, (item.revenue / salesTrendData.maxRevenue) * 120) 
-                            : 4; // Refined clean baseline for zero-sales periods
-                          const y = 140 - barHeight;
+                          const hasOrders = item.count > 0;
+                          const barHeight = hasOrders
+                            ? Math.max(26, (item.count / orderStatusDistribution.maxCount) * 105)
+                            : 4;
+                          const y = 130 - barHeight;
                           const isHovered = hoveredSalesPoint === idx;
 
                           return (
-                            <g 
-                              key={item.key} 
-                              onMouseEnter={() => setHoveredSalesPoint(idx)} 
+                            <g
+                              key={item.key}
+                              onMouseEnter={() => setHoveredSalesPoint(idx)}
                               onMouseLeave={() => setHoveredSalesPoint(null)}
                               style={{ cursor: 'pointer' }}
                             >
@@ -2199,9 +2386,9 @@ export default function AdminDashboardPage() {
                                   x={idx * gap + 4}
                                   y={10}
                                   width={gap - 8}
-                                  height={132}
+                                  height={124}
                                   rx={6}
-                                  fill="rgba(140, 101, 56, 0.08)"
+                                  fill={item.badgeBg}
                                 />
                               )}
 
@@ -2209,77 +2396,97 @@ export default function AdminDashboardPage() {
                               {isHovered && (
                                 <g>
                                   <rect
-                                    x={x + barWidth / 2 - 46}
-                                    y={Math.max(2, y - 30)}
-                                    width={92}
-                                    height={24}
-                                    rx={4}
+                                    x={Math.max(2, Math.min(500, x + barWidth / 2 - 60))}
+                                    y={Math.max(2, y - 32)}
+                                    width={120}
+                                    height={26}
+                                    rx={5}
                                     fill="#181513"
-                                    stroke="#8C6538"
-                                    strokeWidth="1"
-                                    filter="drop-shadow(0 3px 6px rgba(0,0,0,0.3))"
+                                    stroke={item.color}
+                                    strokeWidth="1.2"
+                                    filter="drop-shadow(0 3px 6px rgba(0,0,0,0.35))"
                                   />
                                   <text
-                                    x={x + barWidth / 2}
-                                    y={Math.max(2, y - 30) + 16}
+                                    x={Math.max(2, Math.min(500, x + barWidth / 2 - 60)) + 60}
+                                    y={Math.max(2, y - 32) + 17}
                                     textAnchor="middle"
-                                    fill="#C5A880"
+                                    fill="#FAF7F2"
                                     fontSize="11"
                                     fontWeight="bold"
                                   >
-                                    ₹{item.revenue.toLocaleString('en-IN')}
+                                    {item.label}: {item.count} • ₹{item.revenue.toLocaleString('en-IN')}
                                   </text>
                                 </g>
                               )}
 
-                              {/* Animated Main Bar */}
+                              {/* Order count pill directly above bar if count > 0 */}
+                              {hasOrders && !isHovered && (
+                                <text
+                                  x={x + barWidth / 2}
+                                  y={y - 8}
+                                  textAnchor="middle"
+                                  fill={item.color}
+                                  fontSize="12"
+                                  fontWeight="bold"
+                                >
+                                  {item.count}
+                                </text>
+                              )}
+
+                              {/* Animated Status Bar */}
                               <rect
                                 x={x}
                                 y={y}
                                 width={barWidth}
                                 height={barHeight}
-                                rx={hasSales ? 6 : 2}
-                                fill={
-                                  !hasSales 
-                                    ? "#E6E0D5" 
-                                    : isHovered 
-                                      ? "url(#luxuryBarHover)" 
-                                      : "url(#luxuryBarGrad)"
-                                }
-                                stroke={isHovered ? "#C5A880" : hasSales ? "rgba(140, 101, 56, 0.5)" : "none"}
-                                strokeWidth={isHovered ? "1.5" : "1"}
+                                rx={hasOrders ? 6 : 2}
+                                fill={hasOrders ? `url(#statusGrad_${item.key})` : '#E6E0D5'}
+                                stroke={isHovered ? '#1A1816' : hasOrders ? item.color : 'none'}
+                                strokeWidth={isHovered ? '2' : '0.8'}
                                 style={{
-                                  transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-                                  filter: isHovered 
-                                    ? 'drop-shadow(0 6px 14px rgba(140, 101, 56, 0.45))' 
-                                    : hasSales 
-                                      ? 'drop-shadow(0 3px 8px rgba(24, 21, 19, 0.25))' 
-                                      : 'none'
+                                  transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                                  filter: isHovered
+                                    ? `drop-shadow(0 6px 14px ${item.color}66)`
+                                    : hasOrders
+                                      ? `drop-shadow(0 3px 8px ${item.color}33)`
+                                      : 'none',
                                 }}
                               />
 
-                              {/* X-axis Label */}
+                              {/* Status Name Label */}
                               <text
                                 x={x + barWidth / 2}
-                                y={160}
+                                y={150}
                                 textAnchor="middle"
-                                fill={isHovered ? "#181513" : "#685F56"}
+                                fill={isHovered ? item.color : '#181513'}
                                 fontSize="11"
-                                fontWeight={isHovered || hasSales ? "700" : "500"}
+                                fontWeight="700"
                               >
                                 {item.label}
                               </text>
 
-                              {/* Order count pill below */}
+                              {/* Order count below label */}
                               <text
                                 x={x + barWidth / 2}
-                                y={175}
+                                y={166}
                                 textAnchor="middle"
-                                fill={hasSales ? "#8C6538" : "#A8A29E"}
-                                fontSize="9"
-                                fontWeight={hasSales ? "600" : "400"}
+                                fill={hasOrders ? '#685F56' : '#A8A29E'}
+                                fontSize="9.5"
+                                fontWeight={hasOrders ? '600' : '400'}
                               >
-                                {item.orders} ord
+                                {item.count} {item.count === 1 ? 'order' : 'orders'}
+                              </text>
+
+                              {/* Status Revenue Amount */}
+                              <text
+                                x={x + barWidth / 2}
+                                y={180}
+                                textAnchor="middle"
+                                fill={hasOrders ? item.color : '#C4BBB0'}
+                                fontSize="9"
+                                fontWeight="700"
+                              >
+                                ₹{item.revenue.toLocaleString('en-IN')}
                               </text>
                             </g>
                           );
@@ -2289,177 +2496,143 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                {/* 2. Product Count by Category Donut / Pie Diagram (White, Black, Brown & Grey) */}
+                {/* 2. Top 5 Trending / Most Selling Products List */}
                 <div className="col-12 col-xl-5">
                   <div className="bg-white rounded-3 border shadow-sm p-4 h-100 d-flex flex-column" style={{ borderColor: '#EAE4DC' }}>
                     <div className="d-flex justify-content-between align-items-center mb-3">
                       <div>
                         <div className="d-flex align-items-center gap-2">
-                          <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(26, 24, 22, 0.08)', color: '#1A1816' }}>
-                            <PieChartIcon size={18} />
+                          <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(197, 168, 128, 0.15)', color: '#8C6538' }}>
+                            <TrendingUp size={18} />
                           </div>
-                          <h5 className="fw-bold text-dark mb-0 font-serif">Catalog by Category</h5>
+                          <h5 className="fw-bold text-dark mb-0 font-serif">Top 5 Trending Pieces</h5>
                         </div>
-                        <small className="text-muted">Live distribution of curated garments</small>
+                        <small className="text-muted">Most selling boutique garments</small>
                       </div>
-                      <span className="badge rounded-pill bg-dark text-white px-2.5 py-1" style={{ fontSize: '0.72rem', backgroundColor: '#1A1816' }}>
-                        {products.length} Total
+                      <span className="badge rounded-pill text-white px-2.5 py-1" style={{ fontSize: '0.72rem', backgroundColor: '#1A1816', border: '1px solid rgba(197, 168, 128, 0.3)' }}>
+                        Top Volume
                       </span>
                     </div>
 
-                    <div className="row align-items-center g-3 my-auto">
-                      {/* SVG Segmented Donut / Pie Diagram */}
-                      <div className="col-12 col-sm-6 d-flex justify-content-center">
-                        <div className="position-relative" style={{ width: '185px', height: '185px' }}>
-                          <svg width="185" height="185" viewBox="0 0 200 200">
-                            {/* Background track circle */}
-                            <circle
-                              cx="100"
-                              cy="100"
-                              r="65"
-                              fill="none"
-                              stroke="#F4EFE6"
-                              strokeWidth="21"
-                            />
-
-                            {/* Donut Slices with Clean Separation Gaps */}
-                            {(() => {
-                              const C = 2 * Math.PI * 65; // ~408.4
-                              let offset = 0;
-                              const hasMultiple = categoryStats.slices.length > 1;
-                              const gap = hasMultiple ? 4 : 0;
-
-                              return categoryStats.slices.map((slice) => {
-                                const strokeLength = (slice.count / (categoryStats.total || 1)) * C;
-                                const strokeOffset = (offset / (categoryStats.total || 1)) * C;
-                                offset += slice.count;
-                                const isHovered = hoveredCategorySlice === slice.category;
-                                const dashLength = Math.max(1, strokeLength - gap);
-
-                                return (
-                                  <circle
-                                    key={slice.category}
-                                    cx="100"
-                                    cy="100"
-                                    r="65"
-                                    fill="none"
-                                    stroke={slice.color}
-                                    strokeWidth={isHovered ? "25" : "20"}
-                                    strokeDasharray={`${dashLength} ${C - dashLength}`}
-                                    strokeDashoffset={-strokeOffset - gap / 2}
-                                    transform="rotate(-90 100 100)"
-                                    style={{
-                                      transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-                                      cursor: 'pointer',
-                                      opacity: hoveredCategorySlice && !isHovered ? 0.35 : 1,
-                                      filter: isHovered 
-                                        ? 'drop-shadow(0 4px 10px rgba(0,0,0,0.35))' 
-                                        : 'none',
-                                    }}
-                                    onMouseEnter={() => setHoveredCategorySlice(slice.category)}
-                                    onMouseLeave={() => setHoveredCategorySlice(null)}
-                                  />
-                                );
-                              });
-                            })()}
-
-                            {/* Inner Crisp White Center Disk */}
-                            <circle
-                              cx="100"
-                              cy="100"
-                              r="53"
-                              fill="#FFFFFF"
-                              stroke="#EAE4DC"
-                              strokeWidth="1.2"
-                              style={{ filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.06))' }}
-                            />
-
-                            {/* Center Garment Count */}
-                            <text
-                              x="100"
-                              y="96"
-                              textAnchor="middle"
-                              className="fw-bold font-serif"
-                              fill="#181513"
-                              fontSize="26"
-                            >
-                              {hoveredCategorySlice 
-                                ? (categoryStats.slices.find(s => s.category === hoveredCategorySlice)?.count || categoryStats.total) 
-                                : categoryStats.total}
-                            </text>
-                            <text
-                              x="100"
-                              y="114"
-                              textAnchor="middle"
-                              fill="#8C6538"
-                              fontSize="9.5"
-                              letterSpacing="0.12em"
-                              fontWeight="700"
-                            >
-                              {hoveredCategorySlice 
-                                ? (categoryStats.slices.find(s => s.category === hoveredCategorySlice)?.label.toUpperCase().slice(0, 11)) 
-                                : 'GARMENTS'}
-                            </text>
-                          </svg>
-                        </div>
+                    {topSellingProducts.length === 0 ? (
+                      <div className="text-center py-5 my-auto text-muted small">
+                        No product sales recorded yet.
                       </div>
-
-                      {/* Interactive Legend List (White, Black, Brown, Grey) */}
-                      <div className="col-12 col-sm-6">
-                        <div className="d-flex flex-column gap-1.5">
-                          {categoryStats.slices.map((slice) => {
-                            const isHovered = hoveredCategorySlice === slice.category;
-                            return (
+                    ) : (
+                      <div className="d-flex flex-column gap-2.5 my-auto">
+                        {topSellingProducts.map((prod, index) => {
+                          const isTop1 = index === 0;
+                          return (
+                            <div
+                              key={prod.id || index}
+                              className="d-flex align-items-center gap-2.5 p-2 rounded-3"
+                              style={{
+                                backgroundColor: isTop1 ? 'rgba(197, 168, 128, 0.08)' : '#FAF9F6',
+                                border: isTop1 ? '1px solid rgba(197, 168, 128, 0.45)' : '1px solid #EFEAE3',
+                                transition: 'all 0.2s ease',
+                              }}
+                            >
+                              {/* Rank badge */}
                               <div
-                                key={slice.category}
-                                onMouseEnter={() => setHoveredCategorySlice(slice.category)}
-                                onMouseLeave={() => setHoveredCategorySlice(null)}
-                                className="p-2 rounded d-flex align-items-center justify-content-between transition"
+                                className="d-flex align-items-center justify-content-center flex-shrink-0 rounded-circle fw-bold"
                                 style={{
-                                  backgroundColor: isHovered ? 'rgba(140, 101, 56, 0.08)' : 'rgba(0,0,0,0.02)',
-                                  border: isHovered ? '1px solid #8C6538' : '1px solid transparent',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.2s ease',
+                                  width: '26px',
+                                  height: '26px',
+                                  fontSize: '0.76rem',
+                                  background: isTop1
+                                    ? 'linear-gradient(135deg, #DFB775 0%, #B88E48 100%)'
+                                    : index === 1
+                                    ? '#E2DDD6'
+                                    : index === 2
+                                    ? '#EBD8C5'
+                                    : '#EDE8E1',
+                                  color: isTop1 ? '#1A1816' : '#4A4238',
+                                  boxShadow: isTop1 ? '0 2px 5px rgba(184, 142, 72, 0.35)' : 'none',
                                 }}
                               >
-                                <div className="d-flex align-items-center gap-2 overflow-hidden">
-                                  <span
-                                    className="rounded-circle flex-shrink-0"
-                                    style={{
-                                      width: '11px',
-                                      height: '11px',
-                                      backgroundColor: slice.color,
-                                      border: '1px solid rgba(0,0,0,0.18)',
-                                    }}
-                                  />
-                                  <span
-                                    className="small text-truncate"
-                                    style={{
-                                      fontSize: '0.8rem',
-                                      fontWeight: isHovered ? 700 : 500,
-                                      color: isHovered ? '#181513' : '#3C3630',
-                                    }}
-                                  >
-                                    {slice.label}
+                                {isTop1 ? <Sparkles size={12} className="text-dark" /> : `#${index + 1}`}
+                              </div>
+
+                              {/* Thumbnail */}
+                              <div
+                                style={{
+                                  position: 'relative',
+                                  width: '42px',
+                                  height: '42px',
+                                  borderRadius: '6px',
+                                  overflow: 'hidden',
+                                  flexShrink: 0,
+                                  border: '1px solid #EAE4DC',
+                                  backgroundColor: '#F8F6F0',
+                                }}
+                              >
+                                <Image
+                                  src={prod.image || '/images/cat_dress.jpg'}
+                                  alt={prod.title}
+                                  fill
+                                  sizes="42px"
+                                  style={{ objectFit: 'cover' }}
+                                />
+                              </div>
+
+                              {/* Title, Category & Unit Price */}
+                              <div className="flex-grow-1 overflow-hidden">
+                                <Link
+                                  href={`/product/${prod.id}`}
+                                  target="_blank"
+                                  className="fw-semibold text-dark text-truncate d-block text-decoration-none font-serif"
+                                  style={{ fontSize: '0.84rem', lineHeight: 1.25 }}
+                                  title={prod.title}
+                                >
+                                  {prod.title}
+                                </Link>
+                                <div className="d-flex align-items-center gap-1.5 mt-0.5">
+                                  <span className="text-muted text-truncate" style={{ fontSize: '0.72rem' }}>
+                                    {prod.category}
+                                  </span>
+                                  <span className="text-muted" style={{ fontSize: '0.65rem' }}>•</span>
+                                  <span className="fw-semibold text-dark" style={{ fontSize: '0.72rem' }}>
+                                    ₹{prod.price.toLocaleString('en-IN')}
                                   </span>
                                 </div>
+                              </div>
+
+                              {/* Units sold & Revenue */}
+                              <div className="text-end flex-shrink-0">
                                 <span
-                                  className="badge rounded-pill border small ms-1"
+                                  className="badge rounded-pill d-inline-block px-2 py-0.5"
                                   style={{
-                                    fontSize: '0.68rem',
-                                    backgroundColor: '#FAF8F4',
-                                    borderColor: '#DFD8CC',
-                                    color: '#1A1816',
+                                    backgroundColor: prod.unitsSold > 0 ? '#1A1816' : '#ECE7DF',
+                                    color: prod.unitsSold > 0 ? '#C5A880' : '#8A8177',
+                                    fontSize: '0.7rem',
                                     fontWeight: 600,
                                   }}
                                 >
-                                  {slice.count} ({slice.percent}%)
+                                  {prod.unitsSold} sold
                                 </span>
+                                <div className="fw-bold mt-0.5" style={{ fontSize: '0.76rem', color: '#8C6538' }}>
+                                  ₹{prod.revenue.toLocaleString('en-IN')}
+                                </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          );
+                        })}
                       </div>
+                    )}
+
+                    <div className="mt-auto pt-3 border-top d-flex justify-content-between align-items-center" style={{ borderColor: '#F0ECE4' }}>
+                      <small className="text-muted" style={{ fontSize: '0.72rem' }}>
+                        Ranked by units ordered
+                      </small>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('products')}
+                        className="btn btn-sm btn-link text-decoration-none p-0 d-flex align-items-center gap-1"
+                        style={{ color: '#8C6538', fontWeight: 600, fontSize: '0.76rem' }}
+                      >
+                        <span>View All ({products.length} Garments)</span>
+                        <ArrowUpRight size={13} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -2734,10 +2907,15 @@ export default function AdminDashboardPage() {
                           )}
                         </td>
                         <td className="text-nowrap">
-                          <div className="d-flex align-items-center gap-1 text-warning">
-                            <Star size={13} fill="currentColor" />
-                            <span className="text-dark fw-semibold small">{prod.rating.toFixed(1)}</span>
-                          </div>
+                          {prod.reviewsCount > 0 && prod.rating > 0 ? (
+                            <div className="d-flex align-items-center gap-1 text-warning">
+                              <Star size={13} fill="currentColor" />
+                              <span className="text-dark fw-semibold small">{prod.rating.toFixed(1)}</span>
+                              <span className="text-muted" style={{ fontSize: '0.7rem' }}>({prod.reviewsCount})</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted small" style={{ fontSize: '0.72rem' }}>No reviews</span>
+                          )}
                         </td>
                         <td className="text-nowrap">
                           {prod.isFeatured ? (
@@ -2802,10 +2980,14 @@ export default function AdminDashboardPage() {
                           <span className="badge bg-white text-dark border text-uppercase" style={{ fontSize: '0.65rem' }}>
                             {prod.category}
                           </span>
-                          <div className="d-flex align-items-center gap-1 text-warning" style={{ fontSize: '0.75rem' }}>
-                            <Star size={12} fill="currentColor" />
-                            <span className="text-dark fw-semibold">{prod.rating.toFixed(1)}</span>
-                          </div>
+                          {prod.reviewsCount > 0 && prod.rating > 0 ? (
+                            <div className="d-flex align-items-center gap-1 text-warning" style={{ fontSize: '0.75rem' }}>
+                              <Star size={12} fill="currentColor" />
+                              <span className="text-dark fw-semibold">{prod.rating.toFixed(1)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted" style={{ fontSize: '0.7rem' }}>No reviews</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3295,7 +3477,7 @@ export default function AdminDashboardPage() {
                       <span className="fs-4 fw-bold text-dark">
                         {filteredReviews.length > 0 
                           ? (filteredReviews.reduce((sum, r) => sum + r.rating, 0) / filteredReviews.length).toFixed(1)
-                          : '5.0'}
+                          : '—'}
                       </span>
                     </div>
                   </div>
@@ -3314,7 +3496,7 @@ export default function AdminDashboardPage() {
                     <span className="fs-4 fw-bold text-dark">
                       {filteredReviews.length > 0
                         ? `${Math.round((filteredReviews.filter(r => (r.status || 'approved') === 'approved').length / filteredReviews.length) * 100)}%`
-                        : '100%'}
+                        : '—'}
                     </span>
                   </div>
                 </div>
@@ -3933,15 +4115,20 @@ export default function AdminDashboardPage() {
                 <div className="col-12 col-sm-6 col-xl-3">
                   <div className="bg-white p-3 p-md-4 rounded-4 border shadow-sm h-100" style={{ borderColor: 'rgba(197, 168, 128, 0.22)' }}>
                     <div className="d-flex justify-content-between align-items-center text-muted mb-2">
-                      <span className="small text-uppercase fw-semibold" style={{ fontSize: '0.72rem', letterSpacing: '0.06em' }}>Total Sales (INR)</span>
+                      <span className="small text-uppercase fw-semibold" style={{ fontSize: '0.72rem', letterSpacing: '0.06em' }}>Total Sales (Delivered)</span>
                       <div className="p-2 rounded-circle" style={{ backgroundColor: 'rgba(197, 168, 128, 0.15)' }}>
                         <DollarSign size={18} color="#9E7D47" />
                       </div>
                     </div>
                     <h3 className="fw-bold mb-1 font-serif" style={{ color: '#9E7D47' }}>
-                      ₹{reportBreakdown.totalRevenue.toLocaleString('en-IN')}
+                      ₹{deliveredRevenue.toLocaleString('en-IN')}
                     </h3>
-                    <small className="text-muted">Direct boutique earnings</small>
+                    <div className="d-flex align-items-center justify-content-between mt-1">
+                      <small className="text-muted">Delivered boutique revenue</small>
+                      <span className="badge bg-light text-muted border" style={{ fontSize: '0.7rem' }}>
+                        All: ₹{reportBreakdown.totalRevenue.toLocaleString('en-IN')}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -4000,27 +4187,32 @@ export default function AdminDashboardPage() {
                   </div>
 
                   {/* Actions & Filters wrapper: full width on mobile, auto on desktop */}
-                  <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-lg-auto justify-content-start justify-content-lg-end">
-                    {/* Period Tabs: Segmented luxury pill bar */}
+                  {/* Actions & Filters wrapper: full width on mobile, auto on desktop */}
+                  <div className="d-flex flex-column flex-sm-row flex-wrap align-items-stretch align-items-sm-center gap-2.5 w-100 w-lg-auto justify-content-start justify-content-lg-end">
+                    {/* Period Tabs: Segmented luxury pill bar with horizontal scroll on small devices */}
                     <div 
-                      className="d-flex align-items-center p-1 rounded-pill w-100 w-sm-auto justify-content-between"
+                      className="d-flex align-items-center p-1 rounded-pill flex-nowrap overflow-x-auto w-100 w-sm-auto"
                       style={{ 
                         backgroundColor: '#F4EFE6', 
                         border: '1px solid rgba(197, 168, 128, 0.35)',
-                        gap: '4px'
+                        gap: '3px',
+                        maxWidth: '100%',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        WebkitOverflowScrolling: 'touch',
                       }}
                       role="tablist"
                     >
                       <button
                         type="button"
                         onClick={() => setReportView('daily')}
-                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-grow-1 flex-sm-grow-0"
+                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0 flex-grow-1 flex-sm-grow-0"
                         style={{
                           backgroundColor: reportView === 'daily' ? '#181513' : 'transparent',
                           color: reportView === 'daily' ? '#FAF7F2' : '#5A524C',
                           fontWeight: reportView === 'daily' ? 600 : 500,
-                          fontSize: '0.78rem',
-                          padding: '6px 12px',
+                          fontSize: '0.76rem',
+                          padding: '5px 11px',
                           border: 'none',
                           whiteSpace: 'nowrap',
                           boxShadow: reportView === 'daily' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
@@ -4034,13 +4226,13 @@ export default function AdminDashboardPage() {
                       <button
                         type="button"
                         onClick={() => setReportView('monthly')}
-                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-grow-1 flex-sm-grow-0"
+                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0 flex-grow-1 flex-sm-grow-0"
                         style={{
                           backgroundColor: reportView === 'monthly' ? '#181513' : 'transparent',
                           color: reportView === 'monthly' ? '#FAF7F2' : '#5A524C',
                           fontWeight: reportView === 'monthly' ? 600 : 500,
-                          fontSize: '0.78rem',
-                          padding: '6px 12px',
+                          fontSize: '0.76rem',
+                          padding: '5px 11px',
                           border: 'none',
                           whiteSpace: 'nowrap',
                           boxShadow: reportView === 'monthly' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
@@ -4054,13 +4246,13 @@ export default function AdminDashboardPage() {
                       <button
                         type="button"
                         onClick={() => setReportView('yearly')}
-                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-grow-1 flex-sm-grow-0"
+                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0 flex-grow-1 flex-sm-grow-0"
                         style={{
                           backgroundColor: reportView === 'yearly' ? '#181513' : 'transparent',
                           color: reportView === 'yearly' ? '#FAF7F2' : '#5A524C',
                           fontWeight: reportView === 'yearly' ? 600 : 500,
-                          fontSize: '0.78rem',
-                          padding: '6px 12px',
+                          fontSize: '0.76rem',
+                          padding: '5px 11px',
                           border: 'none',
                           whiteSpace: 'nowrap',
                           boxShadow: reportView === 'yearly' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
@@ -4074,13 +4266,13 @@ export default function AdminDashboardPage() {
                       <button
                         type="button"
                         onClick={() => setReportView('custom')}
-                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-grow-1 flex-sm-grow-0"
+                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0 flex-grow-1 flex-sm-grow-0"
                         style={{
                           backgroundColor: reportView === 'custom' ? '#181513' : 'transparent',
                           color: reportView === 'custom' ? '#FAF7F2' : '#5A524C',
                           fontWeight: reportView === 'custom' ? 600 : 500,
-                          fontSize: '0.78rem',
-                          padding: '6px 12px',
+                          fontSize: '0.76rem',
+                          padding: '5px 11px',
                           border: 'none',
                           whiteSpace: 'nowrap',
                           boxShadow: reportView === 'custom' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
@@ -4092,67 +4284,70 @@ export default function AdminDashboardPage() {
                       </button>
                     </div>
 
-                    {/* Custom Button: Delivered Orders Audit Modal Trigger */}
-                    <button
-                      onClick={() => setShowDeliveredModal(true)}
-                      className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-2"
-                      style={{
-                        backgroundColor: '#181513',
-                        color: '#C5A880',
-                        border: '1px solid rgba(197, 168, 128, 0.45)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                        fontSize: '0.78rem',
-                        whiteSpace: 'nowrap',
-                        transition: 'all 0.2s ease',
-                      }}
-                      title="Open Delivered Orders Audit & Custom Date Modal"
-                    >
-                      <Truck size={14} color="#C5A880" />
-                      <span>Delivered Orders</span>
-                      <span
-                        className="badge rounded-pill ms-1"
-                        style={{ backgroundColor: 'rgba(197, 168, 128, 0.25)', color: '#FAF7F2', fontSize: '0.65rem' }}
+                    {/* Action buttons cluster: wrap gracefully on mobile */}
+                    <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-sm-auto">
+                      {/* Delivered Orders Audit Modal Trigger */}
+                      <button
+                        onClick={() => setShowDeliveredModal(true)}
+                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-sm-grow-0"
+                        style={{
+                          backgroundColor: '#181513',
+                          color: '#C5A880',
+                          border: '1px solid rgba(197, 168, 128, 0.45)',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                          fontSize: '0.76rem',
+                          whiteSpace: 'nowrap',
+                          transition: 'all 0.2s ease',
+                        }}
+                        title="Open Delivered Orders Audit & Custom Date Modal"
                       >
-                        {deliveredOrdersCount}
-                      </span>
-                    </button>
+                        <Truck size={13} color="#C5A880" />
+                        <span>Delivered Orders</span>
+                        <span
+                          className="badge rounded-pill ms-1"
+                          style={{ backgroundColor: 'rgba(197, 168, 128, 0.25)', color: '#FAF7F2', fontSize: '0.65rem' }}
+                        >
+                          {deliveredOrdersCount}
+                        </span>
+                      </button>
 
-                    {/* Export Styled Excel Button */}
-                    <button
-                      onClick={exportBreakdownExcel}
-                      className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-2"
-                      style={{
-                        backgroundColor: '#FFFFFF',
-                        color: '#181513',
-                        border: '1px solid rgba(197, 168, 128, 0.45)',
-                        boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-                        fontSize: '0.78rem',
-                        whiteSpace: 'nowrap',
-                        transition: 'all 0.2s ease',
-                      }}
-                      title="Download Colored Excel Spreadsheet (.xls)"
-                    >
-                      <FileSpreadsheet size={14} color="#15803D" />
-                      <span>Export Excel</span>
-                    </button>
+                      {/* Export Styled Excel Button */}
+                      <button
+                        onClick={exportBreakdownExcel}
+                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-sm-grow-0"
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          color: '#181513',
+                          border: '1px solid rgba(197, 168, 128, 0.45)',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                          fontSize: '0.76rem',
+                          whiteSpace: 'nowrap',
+                          transition: 'all 0.2s ease',
+                        }}
+                        title="Download Colored Excel Spreadsheet (.xls)"
+                      >
+                        <FileSpreadsheet size={13} color="#15803D" />
+                        <span>Export Excel</span>
+                      </button>
 
-                    {/* Copy/Export Summary Button */}
-                    <button
-                      onClick={handleCopyReport}
-                      className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-2"
-                      style={{ 
-                        background: 'linear-gradient(135deg, #C5A880 0%, #B69466 100%)',
-                        color: '#151311',
-                        border: '1px solid rgba(197, 168, 128, 0.4)',
-                        boxShadow: '0 2px 8px rgba(197, 168, 128, 0.25)',
-                        fontSize: '0.78rem',
-                        whiteSpace: 'nowrap',
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      {copiedReport ? <Check size={14} /> : <Copy size={13} />}
-                      <span>{copiedReport ? 'Copied!' : 'Copy Summary'}</span>
-                    </button>
+                      {/* Copy/Export Summary Button */}
+                      <button
+                        onClick={handleCopyReport}
+                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-sm-grow-0"
+                        style={{ 
+                          background: 'linear-gradient(135deg, #C5A880 0%, #B69466 100%)',
+                          color: '#151311',
+                          border: '1px solid rgba(197, 168, 128, 0.4)',
+                          boxShadow: '0 2px 8px rgba(197, 168, 128, 0.25)',
+                          fontSize: '0.76rem',
+                          whiteSpace: 'nowrap',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        {copiedReport ? <Check size={13} /> : <Copy size={13} />}
+                        <span>{copiedReport ? 'Copied!' : 'Copy Summary'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -4327,7 +4522,7 @@ export default function AdminDashboardPage() {
                       return (
                         <div 
                           key={row.periodKey} 
-                          className="p-3.5 rounded-4 bg-white"
+                          className="p-3 p-sm-3.5 rounded-4 bg-white"
                           style={{
                             border: '1px solid rgba(197, 168, 128, 0.28)',
                             boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04)',
@@ -4335,11 +4530,11 @@ export default function AdminDashboardPage() {
                           }}
                         >
                           {/* Card Top: Label & Revenue */}
-                          <div className="d-flex justify-content-between align-items-start mb-2.5">
-                            <div>
+                          <div className="d-flex justify-content-between align-items-start mb-2.5 gap-2">
+                            <div className="flex-grow-1 overflow-hidden">
                               <div className="d-flex align-items-center gap-1.5 mb-1">
-                                <Calendar size={14} color="#9E7D47" />
-                                <span className="fw-bold font-serif text-dark" style={{ fontSize: '1.02rem', letterSpacing: '0.01em' }}>
+                                <Calendar size={14} color="#9E7D47" className="flex-shrink-0" />
+                                <span className="fw-bold font-serif text-dark text-truncate" style={{ fontSize: '1rem', letterSpacing: '0.01em' }}>
                                   {row.label}
                                 </span>
                               </div>
@@ -4555,12 +4750,11 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Categories Table */}
-              <div className="table-responsive">
+              {/* Categories Table (Desktop) */}
+              <div className="table-responsive d-none d-md-block">
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light text-uppercase small text-muted" style={{ fontSize: '0.72rem', letterSpacing: '0.08em' }}>
                     <tr>
-                      <th style={{ width: '60px' }}>Visual</th>
                       <th>Category Name</th>
                       <th>URL Slug</th>
                       <th>Tagline / Headline</th>
@@ -4571,7 +4765,7 @@ export default function AdminDashboardPage() {
                   <tbody>
                     {filteredCategories.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-center py-5 text-muted">
+                        <td colSpan={5} className="text-center py-5 text-muted">
                           No categories found matching your search.
                         </td>
                       </tr>
@@ -4583,20 +4777,6 @@ export default function AdminDashboardPage() {
 
                         return (
                           <tr key={cat.id || cat.slug}>
-                            <td>
-                              <div
-                                className="position-relative rounded overflow-hidden border bg-light"
-                                style={{ width: '42px', height: '42px' }}
-                              >
-                                <Image
-                                  src={cat.image || '/images/hero_set_saree.jpg'}
-                                  alt={cat.name}
-                                  fill
-                                  sizes="42px"
-                                  style={{ objectFit: 'cover' }}
-                                />
-                              </div>
-                            </td>
                             <td>
                               <span className="fw-semibold text-dark">{cat.name}</span>
                             </td>
@@ -4639,6 +4819,92 @@ export default function AdminDashboardPage() {
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Categories Mobile Card View */}
+              <div className="d-md-none d-flex flex-column gap-3">
+                {filteredCategories.length === 0 ? (
+                  <div className="text-center py-4 text-muted small">
+                    No categories found matching your search.
+                  </div>
+                ) : (
+                  filteredCategories.map((cat) => {
+                    const matchingCount = products.filter(
+                      (p) => p.category?.toLowerCase() === cat.slug?.toLowerCase()
+                    ).length;
+
+                    return (
+                      <div key={cat.id || cat.slug} className="bg-light p-3 rounded-3 border" style={{ borderColor: '#EAE4DC' }}>
+                        <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
+                          <div>
+                            <span className="fw-bold font-serif text-dark d-block" style={{ fontSize: '0.98rem' }}>
+                              {cat.name}
+                            </span>
+                            <div className="d-flex align-items-center gap-1.5 mt-1">
+                              <span className="text-muted" style={{ fontSize: '0.72rem' }}>Slug:</span>
+                              <code className="text-muted small bg-white px-2 py-0.5 rounded border" style={{ fontSize: '0.72rem' }}>
+                                /shop/{cat.slug}
+                              </code>
+                            </div>
+                          </div>
+                          <span
+                            className="badge rounded-pill flex-shrink-0"
+                            style={{
+                              backgroundColor: '#FAF8F5',
+                              color: '#8C6538',
+                              border: '1px solid #DFD7CC',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {matchingCount} {matchingCount === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
+
+                        {cat.tagline && (
+                          <div className="p-2 rounded bg-white border mb-2.5" style={{ borderColor: '#EFEAE3' }}>
+                            <small className="text-muted d-block" style={{ fontSize: '0.76rem', fontStyle: 'italic' }}>
+                              &ldquo;{cat.tagline}&rdquo;
+                            </small>
+                          </div>
+                        )}
+
+                        <div className="d-flex justify-content-between align-items-center pt-2 border-top border-secondary-subtle">
+                          <Link
+                            href={`/shop?category=${cat.slug}`}
+                            target="_blank"
+                            className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 py-1 px-2.5"
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            <ExternalLink size={13} />
+                            <span>View Shop</span>
+                          </Link>
+
+                          <div className="d-flex gap-1.5">
+                            <button
+                              onClick={() => setEditingCategory(cat)}
+                              className="btn btn-sm btn-outline-dark d-flex align-items-center gap-1 py-1 px-2.5"
+                              style={{ fontSize: '0.75rem' }}
+                              title="Edit Category"
+                            >
+                              <Edit size={13} />
+                              <span>Edit</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategory(cat)}
+                              className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1 py-1 px-2.5"
+                              style={{ fontSize: '0.75rem' }}
+                              title="Delete Category"
+                            >
+                              <Trash2 size={13} />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
@@ -5450,17 +5716,6 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div>
-                <label className="form-label small fw-semibold">Category Visual Image URL</label>
-                <input
-                  type="text"
-                  value={newCat.image}
-                  onChange={(e) => setNewCat({ ...newCat, image: e.target.value })}
-                  placeholder="/images/hero_set_saree.jpg"
-                  className="form-control"
-                />
-              </div>
-
               <div className="d-flex justify-content-end gap-2 pt-3 border-top mt-2">
                 <button
                   type="button"
@@ -5534,16 +5789,6 @@ export default function AdminDashboardPage() {
                   type="text"
                   value={editingCategory.tagline || ''}
                   onChange={(e) => setEditingCategory({ ...editingCategory, tagline: e.target.value })}
-                  className="form-control"
-                />
-              </div>
-
-              <div>
-                <label className="form-label small fw-semibold">Category Visual Image URL</label>
-                <input
-                  type="text"
-                  value={editingCategory.image || ''}
-                  onChange={(e) => setEditingCategory({ ...editingCategory, image: e.target.value })}
                   className="form-control"
                 />
               </div>

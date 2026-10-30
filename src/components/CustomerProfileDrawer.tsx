@@ -54,17 +54,19 @@ export default function CustomerProfileDrawer() {
   useEffect(() => {
     if (isProfileDrawerOpen && user?.email) {
       setLoadingOrders(true);
-      fetch('/api/orders')
+      fetch(`/api/orders?email=${encodeURIComponent(user.email)}`)
         .then((res) => res.json())
         .then((data) => {
-          if (data.orders) {
-            const userOrders = data.orders.filter(
-              (o: Order) => o.customer?.email?.toLowerCase() === user.email.toLowerCase()
-            );
-            setOrders(userOrders.length > 0 ? userOrders : data.orders.slice(0, 3));
+          if (data.orders && Array.isArray(data.orders)) {
+            setOrders(data.orders);
+          } else {
+            setOrders([]);
           }
         })
-        .catch((err) => console.warn('Could not load customer orders', err))
+        .catch((err) => {
+          console.warn('Could not load customer orders', err);
+          setOrders([]);
+        })
         .finally(() => setLoadingOrders(false));
     }
   }, [isProfileDrawerOpen, user?.email]);

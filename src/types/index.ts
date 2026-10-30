@@ -35,7 +35,7 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
-  image: string;
+  image?: string;
   tagline: string;
   itemCount?: number;
 }
@@ -98,3 +98,18 @@ export interface Review {
   createdAt: string;
 }
 
+export interface CustomerUser {
+  id: string;
+  googleId?: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  provider: 'google' | 'email';
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  wishlist?: string[];
+  joinedAt?: string;
+}

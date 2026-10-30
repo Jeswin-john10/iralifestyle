@@ -170,7 +170,7 @@ const ReviewSchema = new Schema<IReviewDoc>({
   productTitle: { type: String, required: true },
   productImage: { type: String },
   customerName: { type: String, required: true },
-  customerEmail: { type: String, required: true },
+  customerEmail: { type: String, default: 'client@iralifestyle.com' },
   rating: { type: Number, required: true, min: 1, max: 5 },
   comment: { type: String, required: true },
   verifiedPurchase: { type: Boolean, default: true },
@@ -194,11 +194,63 @@ const CategorySchema = new Schema<ICategoryDoc>({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   slug: { type: String, required: true, unique: true },
-  image: { type: String, default: '/images/hero_set_saree.jpg' },
+  image: { type: String, default: '' },
   tagline: { type: String, default: '' },
   itemCount: { type: Number, default: 0 },
 }, { timestamps: true });
 
 export const CategoryModel: Model<ICategoryDoc> =
   mongoose.models.Category || mongoose.model<ICategoryDoc>('Category', CategorySchema);
+
+export interface ICustomerDoc extends Document {
+  googleId?: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  provider: 'google' | 'email';
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  wishlist?: string[];
+  lastLoginAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const CustomerSchema = new Schema<ICustomerDoc>({
+  googleId: { type: String, sparse: true, index: true },
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
+  avatar: { type: String },
+  provider: { type: String, enum: ['google', 'email'], default: 'google' },
+  phone: { type: String, default: '' },
+  address: { type: String, default: '' },
+  city: { type: String, default: '' },
+  state: { type: String, default: 'Kerala' },
+  pincode: { type: String, default: '' },
+  wishlist: { type: [{ type: String }], default: [] },
+  lastLoginAt: { type: Date, default: Date.now },
+}, { timestamps: true });
+
+export const CustomerModel: Model<ICustomerDoc> =
+  mongoose.models.Customer || mongoose.model<ICustomerDoc>('Customer', CustomerSchema);
+
+export interface IAdminDoc extends Document {
+  username: string;
+  password: string;
+  role: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const AdminSchema = new Schema<IAdminDoc>({
+  username: { type: String, required: true, unique: true, trim: true, index: true },
+  password: { type: String, required: true },
+  role: { type: String, default: 'admin' },
+}, { timestamps: true });
+
+export const AdminModel: Model<IAdminDoc> =
+  mongoose.models.Admin || mongoose.model<IAdminDoc>('Admin', AdminSchema);
 

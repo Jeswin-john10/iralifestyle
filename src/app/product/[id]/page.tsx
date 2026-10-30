@@ -18,13 +18,13 @@ import {
   Sparkles,
   ChevronRight,
   Share2,
-  MessageSquare,
   UserCheck,
   User as UserIcon,
   Mail,
   PenLine,
   ThumbsUp,
-  ArrowRight
+  ArrowRight,
+  Lock
 } from 'lucide-react';
 
 import { Suspense } from 'react';
@@ -37,7 +37,7 @@ function ProductDetailContent() {
   const router = useRouter();
   const id = (params.id as string) || '';
   const { addToCart, toggleWishlist, isInWishlist } = useCart();
-  const { user } = useAuth();
+  const { user, openAuthModal } = useAuth();
 
   const initialProd = INITIAL_PRODUCTS.find((p) => p.id === id || p.slug === id) || null;
   const [product, setProduct] = useState<Product | null>(initialProd);
@@ -126,6 +126,13 @@ function ProductDetailContent() {
 
   const inWish = isInWishlist(product.id);
 
+  // Real-time calculation of authentic patron reviews
+  const approvedReviews = reviews.filter((r) => (r.status || 'approved') === 'approved');
+  const realtimeReviewsCount = approvedReviews.length;
+  const realtimeAvgRating = realtimeReviewsCount > 0
+    ? Math.round((approvedReviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / realtimeReviewsCount) * 10) / 10
+    : 0;
+
   const handleAddToCart = () => {
     addToCart(product, selectedSize, quantity);
     setAdded(true);
@@ -134,6 +141,10 @@ function ProductDetailContent() {
 
   const handleBuyNow = () => {
     addToCart(product, selectedSize, quantity);
+    if (!user) {
+      openAuthModal();
+      return;
+    }
     router.push('/checkout');
   };
 
@@ -265,24 +276,37 @@ function ProductDetailContent() {
               }}
               title="Click to view client reviews"
             >
-              <div className="d-flex text-warning">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    size={15}
-                    fill={i < Math.floor(product.rating) ? 'currentColor' : 'none'}
-                    className={i < Math.floor(product.rating) ? 'text-warning' : 'text-muted'}
-                  />
-                ))}
-              </div>
-              <span className="fw-semibold text-dark" style={{ fontSize: '0.85rem' }}>
-                {reviews.length > 0 
-                  ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
-                  : product.rating.toFixed(1)}
-              </span>
-              <span className="text-muted small text-decoration-underline">
-                ({reviews.length || product.reviewsCount} verified reviews)
-              </span>
+              {realtimeReviewsCount > 0 ? (
+                <>
+                  <div className="d-flex text-warning">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        size={15}
+                        fill={i < Math.round(realtimeAvgRating) ? 'currentColor' : 'none'}
+                        className={i < Math.round(realtimeAvgRating) ? 'text-warning' : 'text-muted'}
+                      />
+                    ))}
+                  </div>
+                  <span className="fw-semibold text-dark" style={{ fontSize: '0.85rem' }}>
+                    {realtimeAvgRating.toFixed(1)}
+                  </span>
+                  <span className="text-muted small text-decoration-underline">
+                    ({realtimeReviewsCount} verified {realtimeReviewsCount === 1 ? 'review' : 'reviews'})
+                  </span>
+                </>
+              ) : (
+                <div className="d-flex align-items-center gap-2">
+                  <div className="d-flex text-muted" style={{ opacity: 0.35 }}>
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} size={14} fill="none" className="text-muted" />
+                    ))}
+                  </div>
+                  <span className="text-muted small">
+                    No reviews yet &bull; <span className="text-decoration-underline" style={{ color: 'var(--gold-primary)' }}>Be the first to review</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Price Row */}
@@ -376,25 +400,13 @@ function ProductDetailContent() {
 
               <button
                 onClick={handleBuyNow}
-                className="btn btn-dark w-100 py-2 text-uppercase fw-semibold"
+                className="btn btn-dark w-100 py-2 text-uppercase fw-semibold d-flex align-items-center justify-content-center gap-2"
                 style={{ letterSpacing: '0.12em', fontSize: '0.82rem', height: '44px' }}
+                title={user ? 'Buy it now' : 'Sign in with Google to buy now'}
               >
-                BUY IT NOW
+                {!user && <Lock size={15} color="#D6BC92" />}
+                <span>{user ? 'BUY IT NOW' : 'BUY IT NOW (SIGN IN REQUIRED)'}</span>
               </button>
-
-              {/* Share Product Link Directly to WhatsApp */}
-              <a
-                href={`https://wa.me/919995466002?text=${encodeURIComponent(
-                  `*✨ IRA LIFESTYLE - GARMENT INQUIRY & BILLING ✨*\n\nHello IRA Lifestyle Team, please check this piece:\n• *Garment:* ${product.title}\n• *Price:* ₹${product.price.toLocaleString('en-IN')}\n• *Selected Size:* ${selectedSize}\n• *Quantity:* ${quantity}\n\n🔗 *Check Product Link:* ${typeof window !== 'undefined' ? `${window.location.origin}/product/${product.id}` : `https://iralifestyle.com/product/${product.id}`}\n\nPlease verify availability and bill details. Thank you!`
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-outline-success w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-semibold"
-                style={{ height: '44px', fontSize: '0.82rem', letterSpacing: '0.06em', borderRadius: '4px' }}
-              >
-                <MessageSquare size={16} />
-                <span>SHARE TO WHATSAPP (+91 99954 66002)</span>
-              </a>
             </div>
 
             {/* Value Highlights */}
@@ -559,9 +571,7 @@ function ProductDetailContent() {
                   <div className="d-flex align-items-center gap-3">
                     <div className="text-center px-3 py-2 rounded-2 bg-white border" style={{ minWidth: '85px' }}>
                       <span className="display-6 fw-bold text-dark font-serif d-block" style={{ lineHeight: 1.1 }}>
-                        {reviews.length > 0 
-                          ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
-                          : product.rating.toFixed(1)}
+                        {realtimeReviewsCount > 0 ? realtimeAvgRating.toFixed(1) : '—'}
                       </span>
                       <small className="text-muted" style={{ fontSize: '0.68rem', letterSpacing: '0.04em' }}>OUT OF 5</small>
                     </div>
@@ -569,14 +579,23 @@ function ProductDetailContent() {
                     <div>
                       <div className="d-flex text-warning mb-1">
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} size={17} fill="#F59E0B" color="#F59E0B" />
+                          <Star 
+                            key={i} 
+                            size={17} 
+                            fill={realtimeReviewsCount > 0 && i < Math.round(realtimeAvgRating) ? '#F59E0B' : 'none'} 
+                            color={realtimeReviewsCount > 0 && i < Math.round(realtimeAvgRating) ? '#F59E0B' : '#D1D5DB'} 
+                          />
                         ))}
                       </div>
                       <span className="fw-semibold text-dark small d-block">
-                        {reviews.length > 0 ? `${reviews.length} Verified Patron Review${reviews.length > 1 ? 's' : ''}` : 'No Patron Reviews Yet'}
+                        {realtimeReviewsCount > 0 
+                          ? `${realtimeReviewsCount} Verified Patron Review${realtimeReviewsCount > 1 ? 's' : ''}` 
+                          : 'No Patron Reviews Yet'}
                       </span>
                       <small className="text-muted" style={{ fontSize: '0.72rem' }}>
-                        100% verified atelier purchases from IRA Lifestyle patrons.
+                        {realtimeReviewsCount > 0
+                          ? '100% verified atelier purchases from IRA Lifestyle patrons.'
+                          : 'Share your thoughts and royal fitting experience with other patrons.'}
                       </small>
                     </div>
                   </div>
@@ -681,7 +700,7 @@ function ProductDetailContent() {
                           <input
                             type="text"
                             required
-                            placeholder="e.g. Ananya Sharma"
+                            placeholder="e.g. Radhika Menon"
                             value={reviewName}
                             onChange={(e) => setReviewName(e.target.value)}
                             className="w-100 bg-transparent border-0 text-dark outline-none p-0"
@@ -775,7 +794,7 @@ function ProductDetailContent() {
 
                 {/* Reviews List */}
                 <div className="d-flex flex-column gap-3">
-                  {reviews.length === 0 ? (
+                  {approvedReviews.length === 0 ? (
                     <div className="text-center py-5 px-3 rounded-3 border bg-light">
                       <div 
                         className="p-3 rounded-circle d-inline-flex mb-3"
@@ -797,7 +816,7 @@ function ProductDetailContent() {
                       </button>
                     </div>
                   ) : (
-                    reviews.map((rev) => (
+                    approvedReviews.map((rev) => (
                       <div 
                         key={rev._id || rev.id}
                         className="p-3 p-sm-4 rounded-3 border transition"

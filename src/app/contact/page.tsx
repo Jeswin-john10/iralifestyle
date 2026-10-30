@@ -77,8 +77,8 @@ export default function ContactPage() {
                   <h6 className="mb-0 font-serif fs-5 text-dark">Email Inquiries</h6>
                 </div>
                 <p className="text-muted small mb-1">Customer Care & Orders:</p>
-                <a href="mailto:care@iralifestyle.com" className="fw-semibold text-dark text-decoration-none">
-                  care@iralifestyle.com
+                <a href="mailto:www.iralifestyle@gmail.com" className="fw-semibold text-dark text-decoration-none">
+                  www.iralifestyle@gmail.com
                 </a>
               </div>
 

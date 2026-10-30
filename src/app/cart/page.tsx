@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useCart } from '@/context/CartContext';
-import { Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Tag } from 'lucide-react';
+import { Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Tag, Lock, MessageSquare } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 export default function CartPage() {
+  const { user, openAuthModal } = useAuth();
   const {
     cart,
     updateQuantity,
@@ -26,6 +28,22 @@ export default function CartPage() {
     if (!inputCode) return;
     const res = applyPromo(inputCode);
     setPromoMessage({ text: res.message, success: res.success });
+  };
+
+  const handleOrderViaWhatsApp = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://iralifestyle.com';
+    const itemsText = cart
+      .map(
+        (item, i) =>
+          `${i + 1}. *${item.product.title}*\n   • Size: ${item.selectedSize} | Qty: ${item.quantity} | ₹${(item.product.price * item.quantity).toLocaleString('en-IN')}\n   • 🔗 *Product Link:* ${origin}/product/${item.product.id}`
+      )
+      .join('\n\n');
+
+    const msg = `*✨ IRA LIFESTYLE - SHOPPING BAG ORDER ✨*\n----------------------------------------\nHello IRA Lifestyle Team, I would like to order all items in my bag:\n\n*🛍️ Selected Garments:*\n${itemsText}\n\n----------------------------------------\n*Subtotal:* ₹${cartSubtotal.toLocaleString('en-IN')}\n${discount > 0 ? `*Discount:* -₹${discount.toLocaleString('en-IN')}\n` : ''}*Delivery:* FREE EXPRESS\n*Estimated Total:* ₹${grandTotal.toLocaleString('en-IN')}\n----------------------------------------\nPlease verify availability and confirm my order details. Thank you!`;
+
+    if (typeof window !== 'undefined') {
+      window.open(`https://wa.me/919995466002?text=${encodeURIComponent(msg)}`, '_blank');
+    }
   };
 
   const shippingFee = 0;
@@ -160,9 +178,31 @@ export default function CartPage() {
                 <span style={{ color: 'var(--gold-primary)' }}>₹{grandTotal.toLocaleString('en-IN')}</span>
               </div>
 
-              <Link href="/checkout" className="btn-ira-gold w-100 justify-content-center py-3 text-center mb-3">
-                PROCEED TO SECURE CHECKOUT <ArrowRight size={16} />
-              </Link>
+              {!user ? (
+                <button
+                  type="button"
+                  onClick={() => openAuthModal()}
+                  className="btn-ira-gold w-100 justify-content-center py-3 text-center mb-2 d-flex align-items-center gap-2"
+                >
+                  <Lock size={16} />
+                  <span>SIGN IN TO CHECKOUT</span>
+                </button>
+              ) : (
+                <Link href="/checkout" className="btn-ira-gold w-100 justify-content-center py-3 text-center mb-2">
+                  PROCEED TO SECURE CHECKOUT <ArrowRight size={16} />
+                </Link>
+              )}
+
+              <button
+                type="button"
+                onClick={handleOrderViaWhatsApp}
+                className="btn btn-outline-success w-100 justify-content-center py-2.5 text-center mb-3 d-flex align-items-center gap-2 fw-semibold"
+                style={{ fontSize: '0.84rem', letterSpacing: '0.04em', borderRadius: '4px' }}
+                title="Send all items in shopping bag to WhatsApp"
+              >
+                <MessageSquare size={16} />
+                <span>ORDER BAG VIA WHATSAPP (+91 99954 66002)</span>
+              </button>
 
               <div className="text-center text-muted small d-flex align-items-center justify-content-center gap-1">
                 <ShieldCheck size={15} color="var(--gold-primary)" />

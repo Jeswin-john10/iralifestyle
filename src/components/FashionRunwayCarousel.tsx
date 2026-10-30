@@ -158,7 +158,7 @@ export default function FashionRunwayCarousel() {
                 }}
               >
                 <Image
-                  src={cat.image}
+                  src={cat.image || '/images/cat_dress.jpg'}
                   alt={cat.name}
                   fill
                   sizes="240px"

@@ -130,19 +130,25 @@ export default function ProductCard({ product, onQuickView, index = 0 }: Product
 
         {/* Bottom Action Row (Always visible for mobile & desktop) */}
         <div className="d-flex align-items-center justify-content-between pt-2 border-top mt-1">
-          <div className="d-flex align-items-center text-warning" style={{ fontSize: '0.74rem' }}>
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                size={11}
-                fill={i < Math.floor(product.rating || 5) ? 'currentColor' : 'none'}
-                className={i < Math.floor(product.rating || 5) ? 'text-warning' : 'text-muted'}
-              />
-            ))}
-            <span className="ms-1 text-muted" style={{ fontSize: '0.72rem' }}>
-              ({(product.rating || 4.8).toFixed(1)})
+          {product.reviewsCount > 0 && product.rating > 0 ? (
+            <div className="d-flex align-items-center text-warning" style={{ fontSize: '0.74rem' }}>
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  size={11}
+                  fill={i < Math.round(product.rating) ? 'currentColor' : 'none'}
+                  className={i < Math.round(product.rating) ? 'text-warning' : 'text-muted'}
+                />
+              ))}
+              <span className="ms-1 text-muted fw-semibold" style={{ fontSize: '0.72rem' }}>
+                ({product.rating.toFixed(1)})
+              </span>
+            </div>
+          ) : (
+            <span className="text-muted" style={{ fontSize: '0.72rem', letterSpacing: '0.04em' }}>
+              New Piece
             </span>
-          </div>
+          )}
 
           <button
             onClick={handleAdd}

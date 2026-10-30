@@ -188,7 +188,9 @@ export default function Footer() {
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   <Mail size={15} style={{ color: 'var(--gold-primary)', flexShrink: 0 }} />
-                  <span>care@iralifestyle.com</span>
+                  <a href="mailto:www.iralifestyle@gmail.com" className="text-decoration-none hover-gold" style={{ color: '#C8BFB0' }}>
+                    www.iralifestyle@gmail.com
+                  </a>
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   <Phone size={15} style={{ color: 'var(--gold-primary)', flexShrink: 0 }} />
@@ -204,33 +206,38 @@ export default function Footer() {
             </span>
             <ul className="list-unstyled d-flex flex-column gap-2 mb-0" style={{ fontSize: '0.84rem' }}>
               <li>
-                <Link href="/shop/dresses" className="text-decoration-none footer-link-luxury">
-                  Designer Anarkalis
+                <Link href="/shop/set-saree" className="text-decoration-none footer-link-luxury">
+                  Kerala Set Saree
                 </Link>
               </li>
               <li>
-                <Link href="/shop/sarees" className="text-decoration-none footer-link-luxury">
-                  Kanjivaram & Sarees
+                <Link href="/shop/set-mund" className="text-decoration-none footer-link-luxury">
+                  Traditional Set Mund
                 </Link>
               </li>
               <li>
-                <Link href="/shop/kurtis" className="text-decoration-none footer-link-luxury">
-                  Chanderi Kurti Sets
+                <Link href="/shop/cream-double-mund" className="text-decoration-none footer-link-luxury">
+                  Cream Double Mund
                 </Link>
               </li>
               <li>
-                <Link href="/shop/co-ord-sets" className="text-decoration-none footer-link-luxury">
-                  Contemporary Co-ords
+                <Link href="/shop/churidar-set" className="text-decoration-none footer-link-luxury">
+                  Designer Churidar Set
                 </Link>
               </li>
               <li>
-                <Link href="/shop/new-arrivals" className="text-decoration-none footer-link-luxury">
-                  Fresh Arrivals 2026
+                <Link href="/shop/davani-set" className="text-decoration-none footer-link-luxury">
+                  Festive Davani Set
+                </Link>
+              </li>
+              <li>
+                <Link href="/shop/colour-saree" className="text-decoration-none footer-link-luxury">
+                  Vibrant Colour Saree
                 </Link>
               </li>
               <li>
                 <Link href="/collections" className="text-decoration-none footer-link-luxury">
-                  Curated Lookbooks
+                  Explore All Collections &rarr;
                 </Link>
               </li>
             </ul>
@@ -259,13 +266,13 @@ export default function Footer() {
                 </button>
               </li>
               <li>
-                <Link href="/contact" className="text-decoration-none footer-link-luxury">
-                  Bespoke Sizing Guide
+                <Link href="/shipping" className="text-decoration-none footer-link-luxury">
+                  Shipping &amp; Delivery
                 </Link>
               </li>
               <li>
-                <Link href="/about" className="text-decoration-none footer-link-luxury">
-                  Shipping & Returns
+                <Link href="/terms" className="text-decoration-none footer-link-luxury">
+                  Terms &amp; Conditions
                 </Link>
               </li>
               <li>
@@ -389,9 +396,22 @@ export default function Footer() {
           color: '#8E8576'
         }}
       >
-        <div className="container text-center">
+        <div className="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 text-center text-md-start">
           <div>
             &copy; 2026 IRA Lifestyle Private Limited &bull; All Rights Reserved &bull; Elegance In Every Thread
+          </div>
+          <div className="d-flex align-items-center gap-3">
+            <Link href="/terms" className="text-decoration-none text-muted hover-gold">
+              Terms &amp; Conditions
+            </Link>
+            <span>&bull;</span>
+            <Link href="/shipping" className="text-decoration-none text-muted hover-gold">
+              Shipping &amp; Returns
+            </Link>
+            <span>&bull;</span>
+            <Link href="/contact" className="text-decoration-none text-muted hover-gold">
+              WhatsApp Concierge
+            </Link>
           </div>
         </div>
       </div>

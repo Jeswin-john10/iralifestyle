@@ -91,22 +91,37 @@ export default function QuickViewModal({ product, onClose }: QuickViewProps) {
 
             {/* Rating */}
             <div className="d-flex align-items-center gap-1 my-2">
-              <div className="d-flex text-warning">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    size={14}
-                    fill={i < Math.floor(product.rating) ? 'currentColor' : 'none'}
-                    className={i < Math.floor(product.rating) ? 'text-warning' : 'text-muted'}
-                  />
-                ))}
-              </div>
-              <span className="ms-1 fw-semibold" style={{ fontSize: '0.8rem' }}>
-                ({product.rating.toFixed(1)})
-              </span>
-              <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
-                &bull; {product.reviewsCount} reviews
-              </span>
+              {product.reviewsCount > 0 && product.rating > 0 ? (
+                <>
+                  <div className="d-flex text-warning">
+                    {[...Array(5)].map((_, i) => (
+                      <Star
+                        key={i}
+                        size={14}
+                        fill={i < Math.round(product.rating) ? 'currentColor' : 'none'}
+                        className={i < Math.round(product.rating) ? 'text-warning' : 'text-muted'}
+                      />
+                    ))}
+                  </div>
+                  <span className="ms-1 fw-semibold" style={{ fontSize: '0.8rem' }}>
+                    ({product.rating.toFixed(1)})
+                  </span>
+                  <span className="text-muted ms-1" style={{ fontSize: '0.75rem' }}>
+                    &bull; {product.reviewsCount} {product.reviewsCount === 1 ? 'review' : 'reviews'}
+                  </span>
+                </>
+              ) : (
+                <div className="d-flex align-items-center gap-2">
+                  <div className="d-flex text-muted" style={{ opacity: 0.35 }}>
+                    {[...Array(5)].map((_, i) => (
+                      <Star key={i} size={13} fill="none" className="text-muted" />
+                    ))}
+                  </div>
+                  <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+                    No reviews yet &bull; Be the first to review
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Pricing */}

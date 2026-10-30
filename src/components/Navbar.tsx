@@ -120,31 +120,31 @@ export default function Navbar() {
       </div>
 
       {/* Main Luxury Header */}
-      <header className={`luxury-navbar ${isScrolled ? 'shadow-sm py-2' : 'py-3'}`}>
-        <div className="container d-flex align-items-center justify-content-between">
+      <header className={`luxury-navbar ${isScrolled ? 'shadow-sm py-2 py-md-2.5' : 'py-2.5 py-md-3'}`}>
+        <div className="container-fluid px-2.5 px-sm-3 px-lg-4 d-flex align-items-center justify-content-between">
           {/* Mobile menu trigger */}
           <button 
-            className="btn btn-link text-dark p-0 d-lg-none"
+            className="btn btn-link text-dark p-1 d-lg-none flex-shrink-0 me-1"
             onClick={() => setMobileMenuOpen(true)}
             aria-label="Open mobile menu"
           >
-            <Menu size={24} />
+            <Menu size={22} />
           </button>
 
           {/* Brand Logo with Monogram */}
-          <Link href="/" className="brand-logo-container" aria-label="IRA Lifestyle Home">
+          <Link href="/" className="brand-logo-container me-auto me-lg-0" aria-label="IRA Lifestyle Home">
             <div className="brand-logo-mark">
               <Image 
                 src="/logo.png" 
                 alt="IRA Lifestyle Monogram Logo" 
                 fill 
-                sizes="48px" 
+                sizes="(max-width: 576px) 34px, 48px" 
                 style={{ objectFit: 'contain' }}
                 priority
               />
             </div>
             <div className="brand-text-block">
-              <span className="brand-title fs-4">IRA</span>
+              <span className="brand-title">IRA</span>
               <span className="brand-subtitle">LIFESTYLE</span>
             </div>
           </Link>
@@ -224,14 +224,14 @@ export default function Navbar() {
           </nav>
 
           {/* Right Icon Actions */}
-          <div className="d-flex align-items-center gap-3">
+          <div className="d-flex align-items-center gap-1.5 gap-sm-2 gap-md-3 flex-shrink-0">
             {/* Search Trigger */}
             <button 
               className="btn btn-link p-1 text-dark" 
               onClick={() => setSearchOpen(true)}
               aria-label="Search collection"
             >
-              <Search size={19} />
+              <Search size={18} />
             </button>
 
             {/* Customer Account & Profile Trigger */}
@@ -283,12 +283,25 @@ export default function Navbar() {
               <Heart size={19} />
               {wishlist.length > 0 && (
                 <span 
-                  className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                  className="position-absolute"
                   style={{
+                    top: '-2px',
+                    right: '-4px',
+                    minWidth: '16px',
+                    height: '16px',
+                    borderRadius: '999px',
                     backgroundColor: 'var(--gold-primary)',
                     color: '#fff',
                     fontSize: '0.6rem',
-                    padding: '2px 5px'
+                    fontWeight: 700,
+                    lineHeight: '1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 4px',
+                    border: '1.5px solid #fff',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                    pointerEvents: 'none'
                   }}
                 >
                   {wishlist.length}
@@ -298,22 +311,37 @@ export default function Navbar() {
 
             {/* Cart Trigger */}
             <button 
-              className="btn btn-link p-1 text-dark position-relative"
+              className="btn btn-link p-1 text-dark position-relative me-1"
               onClick={() => setIsCartOpen(true)}
               aria-label="Shopping Cart"
             >
               <ShoppingBag size={20} />
-              <span 
-                className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
-                style={{
-                  backgroundColor: 'var(--gold-primary)',
-                  color: '#fff',
-                  fontSize: '0.62rem',
-                  padding: '2px 5.5px'
-                }}
-              >
-                {cartCount}
-              </span>
+              {cartCount > 0 && (
+                <span 
+                  className="position-absolute"
+                  style={{
+                    top: '-2px',
+                    right: '-4px',
+                    minWidth: '16px',
+                    height: '16px',
+                    borderRadius: '999px',
+                    backgroundColor: 'var(--gold-primary)',
+                    color: '#fff',
+                    fontSize: '0.62rem',
+                    fontWeight: 700,
+                    lineHeight: '1',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 4px',
+                    border: '1.5px solid #fff',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  {cartCount}
+                </span>
+              )}
             </button>
           </div>
         </div>

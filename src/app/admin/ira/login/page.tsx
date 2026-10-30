@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   Lock,
   User,
@@ -283,8 +283,6 @@ function RoyalCrownIcon({ size = 26, color = '#C5A880' }: { size?: number; color
 
 function AdminLoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const reason = searchParams?.get('reason');
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -292,17 +290,22 @@ function AdminLoginForm() {
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [securityNotice, setSecurityNotice] = useState<string | null>(null);
-  const [showDemoModal, setShowDemoModal] = useState(false);
   const [forgotModal, setForgotModal] = useState(false);
 
+  // If already authenticated, redirect straight to dashboard
   useEffect(() => {
-    if (reason === 'inactivity') {
-      setSecurityNotice('Security Alert: You were automatically logged out due to inactivity to safeguard order and client records.');
-    } else if (reason === 'unauthorized') {
-      setSecurityNotice('Authentication Required: Please enter your administrator username and password.');
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('ira_admin_session');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.authenticated || parsed.role === 'admin')) {
+            window.location.replace('/admin/dashboard');
+          }
+        }
+      } catch {}
     }
-  }, [reason]);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -313,12 +316,24 @@ function AdminLoginForm() {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        credentials: 'include',
+        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
       });
 
       const data = await res.json();
-      if (data.success) {
-        router.push('/admin/dashboard');
+      if (data.success && data.user?.role === 'admin') {
+        const token = data.token || 'authenticated_admin_ira_2026';
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ira_admin_session', JSON.stringify({
+            authenticated: true,
+            username: data.user.username,
+            role: 'admin',
+            token: token,
+            timestamp: Date.now()
+          }));
+          document.cookie = `ira_admin_session=${token}; path=/; max-age=604800; SameSite=Lax`;
+        }
+        window.location.replace('/admin/dashboard');
       } else {
         setError(data.message || 'Invalid administrative credentials');
       }
@@ -468,21 +483,7 @@ function AdminLoginForm() {
             </div>
           </div>
 
-          {/* Security Notice from Inactivity or Unauthorized Route Access */}
-          {securityNotice && (
-            <div
-              className="alert py-2 px-3 small mb-3 text-start rounded-3 d-flex align-items-center gap-2"
-              style={{
-                fontSize: '0.82rem',
-                backgroundColor: 'rgba(197, 168, 128, 0.15)',
-                color: '#78552B',
-                border: '1px solid rgba(197, 168, 128, 0.45)',
-              }}
-            >
-              <ShieldCheck size={16} className="flex-shrink-0" color="#9E753F" />
-              <span>{securityNotice}</span>
-            </div>
-          )}
+
 
           {/* Error Notice */}
           {error && (
@@ -517,8 +518,11 @@ function AdminLoginForm() {
                 <User size={18} style={{ color: '#9CA3AF', flexShrink: 0, marginRight: '10px' }} />
                 <input
                   id="admin-username-input"
+                  name="username"
                   type="text"
                   required
+                  autoComplete="username"
+                  spellCheck={false}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter your username"
@@ -554,8 +558,11 @@ function AdminLoginForm() {
                 <Lock size={18} style={{ color: '#9CA3AF', flexShrink: 0, marginRight: '10px' }} />
                 <input
                   id="admin-password-input"
+                  name="password"
                   type={showPass ? 'text' : 'password'}
                   required
+                  autoComplete="current-password"
+                  spellCheck={false}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
@@ -642,15 +649,7 @@ function AdminLoginForm() {
             </button>
           </form>
 
-          {/* Security Divider */}
-          <div className="d-flex align-items-center justify-content-center gap-2 my-4 pt-1">
-            <div className="flex-grow-1" style={{ height: '1px', backgroundColor: '#E4DDD3' }} />
-            <div className="d-flex align-items-center gap-1.5 px-2" style={{ color: '#7D7368', fontSize: '0.75rem' }}>
-              <ShieldCheck size={14} color="#9E753F" />
-              <span>Your data is safe with us</span>
-            </div>
-            <div className="flex-grow-1" style={{ height: '1px', backgroundColor: '#E4DDD3' }} />
-          </div>
+
 
           {/* Storefront Navigation & Demo Credentials Hint */}
           <div className="text-center d-flex flex-column gap-2.5">
@@ -663,8 +662,8 @@ function AdminLoginForm() {
                 fontWeight: 500,
                 transition: 'color 0.2s ease',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#9E7440')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6055')}
+              onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => (e.currentTarget.style.color = '#9E7440')}
+              onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => (e.currentTarget.style.color = '#6B6055')}
             >
               <span>←</span>
               <span>Return to IRA Lifestyle storefront</span>
@@ -672,43 +671,6 @@ function AdminLoginForm() {
 
             {/* Quick Demo Credentials Toggle */}
             <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setShowDemoModal(!showDemoModal)}
-                className="btn btn-sm btn-link text-decoration-none text-muted p-0"
-                style={{ fontSize: '0.72rem' }}
-              >
-                <Sparkles size={11} className="me-1" color="#C5A880" />
-                {showDemoModal ? 'Hide demo access' : 'View demo atelier access credentials'}
-              </button>
-
-              {showDemoModal && (
-                <div
-                  className="mt-2 p-2.5 rounded text-start border transition shadow-sm"
-                  style={{
-                    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                    borderColor: '#D6BC92',
-                    fontSize: '0.76rem',
-                  }}
-                >
-                  <div className="d-flex justify-content-between align-items-center mb-1">
-                    <strong className="text-dark">Official Studio Access:</strong>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUsername('admin');
-                        setPassword('ira@lifestyle2026');
-                      }}
-                      className="btn btn-xs btn-outline-secondary py-0 px-1.5"
-                      style={{ fontSize: '0.68rem' }}
-                    >
-                      Auto-fill
-                    </button>
-                  </div>
-                  <div className="text-muted">Username: <code className="text-dark">admin</code></div>
-                  <div className="text-muted">Password: <code className="text-dark">ira@lifestyle2026</code></div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -732,29 +694,16 @@ function AdminLoginForm() {
             </div>
             <h5 className="font-serif fw-bold text-dark mb-2">Administrative Security</h5>
             <p className="text-muted small mb-4">
-              To safeguard IRA Lifestyle catalog and client customer records, administrative credentials can only be reset through direct master access or by contacting Nikhil & Anju at the Guruvayoor atelier.
+              To safeguard IRA Lifestyle catalog and client customer records, administrative credentials can only be reset through master database access or by contacting Nikhil & Anju at the atelier.
             </p>
-            <div className="d-flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setUsername('admin');
-                  setPassword('ira@lifestyle2026');
-                  setForgotModal(false);
-                }}
-                className="btn btn-sm btn-dark flex-grow-1"
-                style={{ backgroundColor: '#9E7440', borderColor: '#835E30' }}
-              >
-                Use Studio Password
-              </button>
-              <button
-                type="button"
-                onClick={() => setForgotModal(false)}
-                className="btn btn-sm btn-outline-secondary flex-grow-1"
-              >
-                Dismiss
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setForgotModal(false)}
+              className="btn btn-sm btn-dark w-100"
+              style={{ backgroundColor: '#1C1917' }}
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}

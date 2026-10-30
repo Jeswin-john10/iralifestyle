@@ -86,13 +86,18 @@ body {
 
 /* Luxury Sticky Navbar */
 .luxury-navbar {
-  background-color: rgba(251, 248, 242, 0.96);
+  background-color: rgba(251, 248, 242, 0.98);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-subtle);
   position: sticky;
   top: 0;
+  width: 100%;
+  left: 0;
+  right: 0;
   z-index: 1000;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-radius: 0 !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* Premium Nav Brand Logo */
@@ -143,6 +148,7 @@ body {
   color: #1E1B18;
   text-transform: uppercase;
   line-height: 1;
+  font-size: 1.45rem;
 }
 
 .brand-subtitle {
@@ -152,6 +158,25 @@ body {
   text-transform: uppercase;
   font-weight: 600;
   margin-top: 3px;
+}
+
+@media (max-width: 576px) {
+  .brand-logo-container {
+    gap: 6px !important;
+  }
+  .brand-logo-mark {
+    width: 32px !important;
+    height: 38px !important;
+  }
+  .brand-title {
+    font-size: 1.12rem !important;
+    letter-spacing: 0.14em !important;
+  }
+  .brand-subtitle {
+    font-size: 0.48rem !important;
+    letter-spacing: 0.2em !important;
+    margin-top: 1px !important;
+  }
 }
 
 .nav-link-ira {
@@ -418,7 +443,8 @@ body {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -432,6 +458,27 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--gold-primary);
+}
+
+/* Global utility to hide scrollbars completely while preserving smooth scrolling */
+.no-scrollbar,
+.hide-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.hide-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Luxury Range Slider Styling */
+.ira-range-slider {
+  accent-color: #A67C43;
+  cursor: pointer;
+  height: 4px;
 }
 
 /* =========================================
@@ -1164,7 +1211,7 @@ body {
   z-index: 3;
   text-align: right;
   color: #FFFFFF;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
   pointer-events: none;
 }
 
@@ -1174,41 +1221,45 @@ body {
     right: 16px;
   }
   .hero-floating-script .script-title {
-    font-size: 2.1rem !important;
+    font-size: 1.7rem !important;
   }
   .hero-floating-script .script-sub-uppercase {
-    font-size: 0.54rem !important;
-    letter-spacing: 0.18em !important;
+    font-size: 0.52rem !important;
+    letter-spacing: 0.2em !important;
   }
 }
 
 .hero-floating-script .script-title {
-  font-family: var(--font-script);
-  font-size: 2.8rem;
-  line-height: 0.9;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 2.5rem;
+  line-height: 1;
   margin: 0;
   color: #FFFFFF;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.75);
 }
 
 .hero-floating-script .script-sub-uppercase {
   font-family: var(--font-sans);
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   font-weight: 600;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.26em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.95);
-  margin-top: 2px;
+  margin-top: 4px;
   position: relative;
   display: inline-block;
   padding-bottom: 4px;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
 }
 
 .hero-floating-script .script-sub-uppercase::after {
   content: '';
   position: absolute;
   bottom: 0;
-  left: 15%;
-  right: 15%;
+  left: 10%;
+  right: 10%;
   height: 1px;
   background: #E5CCA2;
 }

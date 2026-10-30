@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, CartItem } from '@/types';
+import { useAuth } from '@/context/AuthContext';
 
 interface CartContextType {
   cart: CartItem[];
@@ -26,13 +27,14 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<Product[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [discountPercent, setDiscountPercent] = useState(0);
 
-  // Load from localStorage on mount
+  // 1. Load initial cart & wishlist from localStorage on mount
   useEffect(() => {
     try {
       const savedCart = localStorage.getItem('ira_cart');
@@ -45,7 +47,66 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Save to localStorage on changes
+  // 2. Real-Time DB Wishlist Synchronization for Logged-In Customer
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncDbWishlist() {
+      if (!user) return;
+
+      try {
+        // If there were local guest items, merge them to MongoDB
+        const localWishlistRaw = localStorage.getItem('ira_wishlist');
+        const localWishlist: Product[] = localWishlistRaw ? JSON.parse(localWishlistRaw) : [];
+        const localIds = localWishlist.map((p) => p.id).filter(Boolean);
+
+        if (localIds.length > 0) {
+          const syncRes = await fetch('/api/wishlist', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              productIds: localIds,
+              email: user.email,
+              userId: user.id,
+            }),
+          });
+
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            if (isMounted && syncData.wishlist) {
+              setWishlist(syncData.wishlist);
+              localStorage.setItem('ira_wishlist', JSON.stringify(syncData.wishlist));
+              return;
+            }
+          }
+        }
+
+        // Fetch user's persistent wishlist from MongoDB Atlas
+        const res = await fetch(
+          `/api/wishlist?email=${encodeURIComponent(user.email)}&userId=${encodeURIComponent(user.id)}`,
+          { cache: 'no-store' }
+        );
+
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.wishlist) {
+            setWishlist(data.wishlist);
+            localStorage.setItem('ira_wishlist', JSON.stringify(data.wishlist));
+          }
+        }
+      } catch (err) {
+        console.warn('Real-time DB wishlist sync error:', err);
+      }
+    }
+
+    syncDbWishlist();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  // Save cart to localStorage on changes
   useEffect(() => {
     try {
       localStorage.setItem('ira_cart', JSON.stringify(cart));
@@ -54,6 +115,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [cart]);
 
+  // Save wishlist to localStorage on changes
   useEffect(() => {
     try {
       localStorage.setItem('ira_wishlist', JSON.stringify(wishlist));
@@ -112,13 +174,40 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleWishlist = (product: Product) => {
+    // 1. Instant optimistic local update
     setWishlist((prev) => {
       const exists = prev.some((p) => p.id === product.id);
-      if (exists) {
-        return prev.filter((p) => p.id !== product.id);
+      const next = exists ? prev.filter((p) => p.id !== product.id) : [...prev, product];
+      try {
+        localStorage.setItem('ira_wishlist', JSON.stringify(next));
+      } catch (e) {
+        console.warn('Could not save wishlist to localStorage', e);
       }
-      return [...prev, product];
+      return next;
     });
+
+    // 2. Real-time DB persistence to MongoDB Atlas if user is authenticated
+    if (user) {
+      fetch('/api/wishlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: product.id,
+          email: user.email,
+          userId: user.id,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.wishlist) {
+            setWishlist(data.wishlist);
+            localStorage.setItem('ira_wishlist', JSON.stringify(data.wishlist));
+          }
+        })
+        .catch((err) => {
+          console.warn('MongoDB wishlist persistence error:', err);
+        });
+    }
   };
 
   const isInWishlist = (productId: string) => {
@@ -147,7 +236,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const discount = Math.round(cartSubtotal * discountPercent);
-  const freeShippingThreshold = 0;
   const shippingFee = 0;
   const freeShippingRemaining = 0;
 

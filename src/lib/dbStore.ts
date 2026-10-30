@@ -1,102 +1,16 @@
+import mongoose from 'mongoose';
 import { connectToDatabase } from './mongodb';
-import { ProductModel, OrderModel, InquiryModel, NewsletterModel, ReviewModel, CategoryModel } from './models';
+import { ProductModel, OrderModel, InquiryModel, NewsletterModel, ReviewModel, CategoryModel, CustomerModel } from './models';
 import { INITIAL_PRODUCTS, CATEGORIES } from '@/data/initialData';
-import { Product, Order, Inquiry, Review, Category } from '@/types';
+import { Product, Order, Inquiry, Review, Category, CustomerUser } from '@/types';
 
 // In-memory persistent state for development or zero-config fallback
 let memoryProducts: Product[] = [...INITIAL_PRODUCTS];
 let memoryCategories: Category[] = [...CATEGORIES];
-let memoryOrders: Order[] = [
-  {
-    orderId: 'ORD-IRA-1092',
-    customer: {
-      fullName: 'Aarohi Sen',
-      email: 'aarohi@example.com',
-      phone: '+91 98765 43210',
-    },
-    shippingAddress: {
-      address: '402, Royal Palms, Bandra West',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      pincode: '400050',
-      country: 'India',
-    },
-    items: [
-      {
-        productId: 'ira-set-saree-1',
-        title: 'Traditional Kerala Kasavu Set Saree',
-        price: 2499,
-        size: 'Free Size',
-        quantity: 1,
-        image: '/images/hero_set_saree.jpg',
-      }
-    ],
-    subtotal: 2499,
-    discount: 0,
-    shipping: 0,
-    total: 2499,
-    paymentMethod: 'UPI',
-    paymentStatus: 'paid',
-    orderStatus: 'Confirmed',
-    createdAt: '2026-03-15T10:00:00.000Z',
-  }
-];
-let memoryInquiries: Inquiry[] = [
-  {
-    name: 'Kavya Rajesh',
-    email: 'kavya.rajesh@gmail.com',
-    phone: '+91 99954 66002',
-    subject: 'Bridal Silk Anarkali Customization',
-    message: 'Hello Nikhil & Anju, do you offer custom height adjustments for the Pure Silk Anarkali? Looking forward to visiting your Guruvayoor atelier!',
-    createdAt: new Date().toISOString(),
-  }
-];
-let memoryNewsletters: Array<{ email: string; createdAt: string }> = [
-  { email: 'ananya.sharma@gmail.com', createdAt: new Date(Date.now() - 86400000 * 3).toISOString() },
-  { email: 'meera.patel@gmail.com', createdAt: new Date(Date.now() - 86400000 * 2).toISOString() },
-  { email: 'sneha.nair@gmail.com', createdAt: new Date(Date.now() - 86400000 * 1).toISOString() },
-];
-let memoryReviews: Review[] = [
-  {
-    _id: 'rev-101',
-    productId: 'ira-set-saree-1',
-    productTitle: 'Traditional Kerala Kasavu Set Saree',
-    productImage: '/images/hero_set_saree.jpg',
-    customerName: 'Pooja Menon',
-    customerEmail: 'pooja.menon@gmail.com',
-    rating: 5,
-    comment: 'The Kasavu zari and pure handloom drape are exquisite! Wore this to a temple ceremony in Thrissur and received countless compliments.',
-    verifiedPurchase: true,
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    _id: 'rev-102',
-    productId: 'ira-cream-mundu-1',
-    productTitle: 'Royal Cream Kasavu Double Mundu',
-    productImage: '/images/hero_men_double_mundu.jpg',
-    customerName: 'Naveen Nambiar',
-    customerEmail: 'naveen.nambiar@gmail.com',
-    rating: 5,
-    comment: 'Exceptional 80s yarn quality. The gold border is thick, royal, and stays crisp all day.',
-    verifiedPurchase: true,
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 4).toISOString(),
-  },
-  {
-    _id: 'rev-103',
-    productId: 'ira-davani-1',
-    productTitle: 'Traditional Kerala Dhavani Half Saree Set',
-    productImage: '/images/cat_davani.jpg',
-    customerName: 'Ananya Sharma',
-    customerEmail: 'ananya.sharma@gmail.com',
-    rating: 5,
-    comment: 'Pure handloom authenticity! The pleated pavada flare and contrast dupatta are breathtaking. Highly recommend IRA Lifestyle!',
-    verifiedPurchase: true,
-    status: 'approved',
-    createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
-  }
-];
+let memoryOrders: Order[] = [];
+let memoryInquiries: Inquiry[] = [];
+let memoryNewsletters: Array<{ email: string; createdAt: string }> = [];
+let memoryReviews: Review[] = [];
 
 export async function getProducts(filter?: { category?: string; featured?: boolean }): Promise<Product[]> {
   try {
@@ -106,11 +20,15 @@ export async function getProducts(filter?: { category?: string; featured?: boole
       const dummyIds = ['ira-101', 'ira-102', 'ira-103', 'ira-104', 'ira-105', 'ira-106'];
       await ProductModel.deleteMany({ id: { $in: dummyIds } });
 
-      // 2. Upsert authentic 14 boutique categories products
+      // 2. Upsert authentic 14 boutique categories products (preserving realtime rating/reviews)
       for (const p of INITIAL_PRODUCTS) {
+        const { rating, reviewsCount, ...restOfProduct } = p;
         await ProductModel.updateOne(
           { id: p.id },
-          { $set: p },
+          { 
+            $set: restOfProduct,
+            $setOnInsert: { rating: 0, reviewsCount: 0 }
+          },
           { upsert: true }
         );
       }
@@ -186,8 +104,8 @@ export async function createProduct(productData: Partial<Product>): Promise<Prod
     categoryLabel: productData.categoryLabel || 'Dresses',
     price: Number(productData.price) || 2499,
     originalPrice: productData.originalPrice ? Number(productData.originalPrice) : undefined,
-    rating: 5.0,
-    reviewsCount: 1,
+    rating: 0,
+    reviewsCount: 0,
     image: productData.image || '/images/cat_dress.jpg',
     gallery: productData.gallery || [productData.image || '/images/cat_dress.jpg'],
     description: productData.description || 'Exclusive luxury ethnic attire crafted for timeless grace.',
@@ -285,32 +203,55 @@ export async function createOrder(orderData: Partial<Order>): Promise<Order> {
   return newOrder;
 }
 
-export async function getOrders(): Promise<Order[]> {
+export async function getOrders(filter?: { email?: string; orderId?: string }): Promise<Order[]> {
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      const docs = await OrderModel.find().sort({ createdAt: -1 }).lean();
+      const query: Record<string, unknown> = {};
+      if (filter?.email) {
+        query['customer.email'] = { $regex: new RegExp(`^${filter.email.trim()}$`, 'i') };
+      }
+      if (filter?.orderId) {
+        query.orderId = filter.orderId.trim();
+      }
+      const docs = await OrderModel.find(query).sort({ createdAt: -1 }).lean();
       return docs as unknown as Order[];
     }
   } catch (err) {
     console.warn('MongoDB getOrders fallback:', err);
   }
 
-  return memoryOrders;
+  let list = [...memoryOrders];
+  if (filter?.email) {
+    list = list.filter(o => o.customer?.email?.toLowerCase() === filter.email!.toLowerCase());
+  }
+  if (filter?.orderId) {
+    list = list.filter(o => o.orderId === filter.orderId);
+  }
+  return list;
 }
 
 export async function createInquiry(inquiry: Inquiry): Promise<Inquiry> {
+  const cleanInquiry: Inquiry = {
+    name: inquiry.name?.trim() || '',
+    email: inquiry.email?.trim().toLowerCase() || '',
+    phone: inquiry.phone?.trim() || '',
+    subject: inquiry.subject?.trim() || 'General Inquiry',
+    message: inquiry.message?.trim() || '',
+    createdAt: inquiry.createdAt || new Date().toISOString(),
+  };
+
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      const doc = await InquiryModel.create(inquiry);
+      const doc = await InquiryModel.create(cleanInquiry);
       return doc.toObject() as unknown as Inquiry;
     }
   } catch (err) {
     console.warn('MongoDB inquiry fallback:', err);
   }
-  memoryInquiries.unshift(inquiry);
-  return inquiry;
+  memoryInquiries.unshift(cleanInquiry);
+  return cleanInquiry;
 }
 
 export async function updateOrderStatus(
@@ -388,12 +329,13 @@ export async function deleteInquiry(id: string): Promise<boolean> {
 }
 
 export async function addNewsletterSubscriber(email: string): Promise<boolean> {
+  const cleanEmail = email.trim().toLowerCase();
   try {
     const conn = await connectToDatabase();
     if (conn) {
       await NewsletterModel.findOneAndUpdate(
-        { email },
-        { $setOnInsert: { email } },
+        { email: cleanEmail },
+        { $set: { email: cleanEmail, createdAt: new Date() } },
         { upsert: true, new: true }
       );
       return true;
@@ -402,8 +344,8 @@ export async function addNewsletterSubscriber(email: string): Promise<boolean> {
     console.warn('MongoDB addNewsletterSubscriber fallback:', err);
   }
 
-  if (!memoryNewsletters.some(s => s.email.toLowerCase() === email.toLowerCase())) {
-    memoryNewsletters.unshift({ email, createdAt: new Date().toISOString() });
+  if (!memoryNewsletters.some(s => s.email.toLowerCase() === cleanEmail)) {
+    memoryNewsletters.unshift({ email: cleanEmail, createdAt: new Date().toISOString() });
   }
   return true;
 }
@@ -413,12 +355,10 @@ export async function getNewsletterSubscribers(): Promise<Array<{ email: string;
     const conn = await connectToDatabase();
     if (conn) {
       const docs = await NewsletterModel.find().sort({ createdAt: -1 }).lean();
-      if (docs && docs.length > 0) {
-        return docs.map(d => ({
-          email: d.email,
-          createdAt: (d as any).createdAt ? new Date((d as any).createdAt).toISOString() : new Date().toISOString(),
-        }));
-      }
+      return docs.map(d => ({
+        email: d.email,
+        createdAt: (d as any).createdAt ? new Date((d as any).createdAt).toISOString() : new Date().toISOString(),
+      }));
     }
   } catch (err) {
     console.warn('MongoDB getNewsletterSubscribers fallback:', err);
@@ -441,6 +381,51 @@ export async function deleteNewsletterSubscriber(email: string): Promise<boolean
   return memoryNewsletters.length < prevLen;
 }
 
+export async function syncProductRatingAndReviews(productId: string): Promise<void> {
+  if (!productId) return;
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      const prod = await ProductModel.findOne({
+        $or: [{ id: productId }, { slug: productId }]
+      }).lean();
+
+      const ids: string[] = [productId, prod?.id, prod?.slug].filter((x): x is string => Boolean(x));
+
+      const approvedRevs = await ReviewModel.find({
+        productId: { $in: ids },
+        $or: [{ status: 'approved' }, { status: { $exists: false } }]
+      }).lean();
+
+      const revList = approvedRevs as unknown as Review[];
+      const count = revList.length;
+      const avg = count > 0 
+        ? Math.round((revList.reduce((acc: number, r: Review) => acc + (Number(r.rating) || 0), 0) / count) * 10) / 10 
+        : 0;
+
+      await ProductModel.updateMany(
+        { $or: [{ id: productId }, { slug: productId }, ...(prod ? [{ _id: prod._id }] : [])] },
+        { $set: { rating: avg, reviewsCount: count } }
+      );
+    }
+  } catch (err) {
+    console.warn('MongoDB syncProductRatingAndReviews error:', err);
+  }
+
+  // Also sync memory store
+  const prod = memoryProducts.find(p => p.id === productId || p.slug === productId);
+  const ids = prod ? [productId, prod.id, prod.slug].filter(Boolean) : [productId];
+  const memRevs = memoryReviews.filter(r => ids.includes(r.productId) && (r.status === 'approved' || !r.status));
+  const memCount = memRevs.length;
+  const memAvg = memCount > 0 
+    ? Math.round((memRevs.reduce((acc, r) => acc + (Number(r.rating) || 0), 0) / memCount) * 10) / 10 
+    : 0;
+  if (prod) {
+    prod.rating = memAvg;
+    prod.reviewsCount = memCount;
+  }
+}
+
 export async function createReview(reviewData: Partial<Review>): Promise<Review> {
   const newRev: Review = {
     _id: `rev-${Date.now()}`,
@@ -448,7 +433,7 @@ export async function createReview(reviewData: Partial<Review>): Promise<Review>
     productTitle: reviewData.productTitle || '',
     productImage: reviewData.productImage || '',
     customerName: reviewData.customerName || 'Anonymous Client',
-    customerEmail: reviewData.customerEmail || '',
+    customerEmail: reviewData.customerEmail || 'client@iralifestyle.com',
     rating: Number(reviewData.rating) || 5,
     comment: reviewData.comment || '',
     verifiedPurchase: true,
@@ -461,6 +446,7 @@ export async function createReview(reviewData: Partial<Review>): Promise<Review>
     if (conn) {
       const doc = await ReviewModel.create(newRev);
       const saved = doc.toObject() as unknown as Review;
+      await syncProductRatingAndReviews(newRev.productId);
       return {
         ...saved,
         _id: (doc._id as unknown as string).toString(),
@@ -471,6 +457,7 @@ export async function createReview(reviewData: Partial<Review>): Promise<Review>
   }
 
   memoryReviews.unshift(newRev);
+  await syncProductRatingAndReviews(newRev.productId);
   return newRev;
 }
 
@@ -478,30 +465,60 @@ export async function getReviews(productId?: string): Promise<Review[]> {
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      const filter = productId ? { productId } : {};
-      const docs = await ReviewModel.find(filter).sort({ createdAt: -1 }).lean();
-      if (docs && docs.length > 0) {
-        return docs.map(d => ({
-          ...d,
-          _id: (d._id as unknown as string).toString(),
-        })) as unknown as Review[];
+      // Clean up any legacy dummy reviews
+      await ReviewModel.deleteMany({
+        $or: [
+          { _id: { $in: ['rev-101', 'rev-102', 'rev-103'] } },
+          { customerEmail: { $in: ['pooja.menon@gmail.com', 'naveen.nambiar@gmail.com', 'divya.krishnan@gmail.com'] } },
+          { customerName: { $in: ['Pooja Menon', 'Naveen Nambiar', 'Divya Krishnan'] } }
+        ]
+      });
+
+      let filter: any = {};
+      if (productId) {
+        const prod = await ProductModel.findOne({
+          $or: [{ id: productId }, { slug: productId }]
+        }).lean();
+
+        if (prod) {
+          const ids: string[] = [productId, prod.id, prod.slug].filter((x): x is string => Boolean(x));
+          filter = { productId: { $in: ids } };
+        } else {
+          filter = { productId };
+        }
       }
+
+      const docs = await ReviewModel.find(filter).sort({ createdAt: -1 }).lean();
+      return docs.map(d => ({
+        ...d,
+        _id: (d._id as unknown as string).toString(),
+      })) as unknown as Review[];
     }
   } catch (err) {
     console.warn('MongoDB getReviews fallback:', err);
   }
 
   if (productId) {
-    return memoryReviews.filter(r => r.productId === productId);
+    const prod = memoryProducts.find(p => p.id === productId || p.slug === productId);
+    const ids = prod ? [productId, prod.id, prod.slug].filter(Boolean) : [productId];
+    return memoryReviews.filter(r => ids.includes(r.productId));
   }
   return memoryReviews;
 }
 
 export async function deleteReview(id: string): Promise<boolean> {
+  let productId: string | undefined;
   try {
     const conn = await connectToDatabase();
     if (conn) {
+      const existing = await ReviewModel.findById(id).lean();
+      if (existing) {
+        productId = existing.productId;
+      }
       await ReviewModel.deleteOne({ _id: id });
+      if (productId) {
+        await syncProductRatingAndReviews(productId);
+      }
       return true;
     }
   } catch (err) {
@@ -509,15 +526,30 @@ export async function deleteReview(id: string): Promise<boolean> {
   }
 
   const prevLen = memoryReviews.length;
+  const target = memoryReviews.find(r => r._id === id || r.id === id);
+  if (target) {
+    productId = target.productId;
+  }
   memoryReviews = memoryReviews.filter(r => r._id !== id && r.id !== id);
+  if (productId) {
+    await syncProductRatingAndReviews(productId);
+  }
   return memoryReviews.length < prevLen;
 }
 
 export async function updateReviewStatus(id: string, status: string): Promise<boolean> {
+  let productId: string | undefined;
   try {
     const conn = await connectToDatabase();
     if (conn) {
+      const existing = await ReviewModel.findById(id).lean();
+      if (existing) {
+        productId = existing.productId;
+      }
       await ReviewModel.updateOne({ _id: id }, { $set: { status } });
+      if (productId) {
+        await syncProductRatingAndReviews(productId);
+      }
       return true;
     }
   } catch (err) {
@@ -527,6 +559,9 @@ export async function updateReviewStatus(id: string, status: string): Promise<bo
   const r = memoryReviews.find(item => item._id === id || item.id === id);
   if (r) {
     r.status = status as any;
+    if (r.productId) {
+      await syncProductRatingAndReviews(r.productId);
+    }
     return true;
   }
   return false;
@@ -549,7 +584,7 @@ export async function getCategories(): Promise<Category[]> {
         id: doc.id || (doc._id as unknown as string).toString(),
         name: doc.name,
         slug: doc.slug,
-        image: doc.image || '/images/hero_set_saree.jpg',
+        image: doc.image || '',
         tagline: doc.tagline || '',
         itemCount: doc.itemCount || 0,
       }));
@@ -567,7 +602,7 @@ export async function createCategory(catData: Partial<Category>): Promise<Catego
     id: catData.id || `cat-${Date.now()}`,
     name,
     slug,
-    image: catData.image || '/images/hero_set_saree.jpg',
+    image: catData.image || '',
     tagline: catData.tagline || 'Exquisite traditional handcrafted wear',
     itemCount: Number(catData.itemCount) || 0,
   };
@@ -634,6 +669,301 @@ export async function deleteCategory(idOrSlug: string): Promise<boolean> {
   return memoryCategories.length < prevLen;
 }
 
+// Memory fallback store for customers
+let memoryCustomers: CustomerUser[] = [];
 
+export async function findOrCreateGoogleCustomer(profile: {
+  googleId: string;
+  name: string;
+  email: string;
+  avatar?: string;
+}): Promise<CustomerUser> {
+  const normalizedEmail = profile.email.toLowerCase().trim();
 
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      let customer = await CustomerModel.findOne({
+        $or: [{ googleId: profile.googleId }, { email: normalizedEmail }],
+      });
 
+      if (customer) {
+        // Update user profile info on login
+        customer.googleId = profile.googleId;
+        if (profile.name) customer.name = profile.name;
+        if (profile.avatar) customer.avatar = profile.avatar;
+        customer.lastLoginAt = new Date();
+        await customer.save();
+      } else {
+        customer = await CustomerModel.create({
+          googleId: profile.googleId,
+          name: profile.name || 'Valued Client',
+          email: normalizedEmail,
+          avatar: profile.avatar || '',
+          provider: 'google',
+          lastLoginAt: new Date(),
+        });
+      }
+
+      return {
+        id: customer._id.toString(),
+        googleId: customer.googleId,
+        name: customer.name,
+        email: customer.email,
+        avatar: customer.avatar,
+        provider: 'google',
+        phone: customer.phone || '',
+        address: customer.address || '',
+        city: customer.city || '',
+        state: customer.state || 'Kerala',
+        pincode: customer.pincode || '',
+        wishlist: (customer.wishlist as string[]) || [],
+        joinedAt: customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : undefined,
+      };
+    }
+  } catch (err) {
+    console.warn('MongoDB findOrCreateGoogleCustomer fallback:', err);
+  }
+
+  // Memory fallback
+  let existing = memoryCustomers.find(
+    (c) => c.googleId === profile.googleId || c.email.toLowerCase() === normalizedEmail
+  );
+  if (existing) {
+    existing.name = profile.name || existing.name;
+    existing.avatar = profile.avatar || existing.avatar;
+    existing.googleId = profile.googleId;
+    return existing;
+  }
+
+  const newCustomer: CustomerUser = {
+    id: `cust-${Date.now()}`,
+    googleId: profile.googleId,
+    name: profile.name || 'Valued Client',
+    email: normalizedEmail,
+    avatar: profile.avatar || '',
+    provider: 'google',
+    phone: '',
+    address: '',
+    city: '',
+    state: 'Kerala',
+    pincode: '',
+    wishlist: [],
+    joinedAt: new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
+  };
+  memoryCustomers.push(newCustomer);
+  return newCustomer;
+}
+
+export async function getCustomerById(id: string): Promise<CustomerUser | null> {
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      const customer = await CustomerModel.findById(id).lean();
+      if (customer) {
+        return {
+          id: customer._id.toString(),
+          googleId: customer.googleId,
+          name: customer.name,
+          email: customer.email,
+          avatar: customer.avatar,
+          provider: customer.provider || 'google',
+          phone: customer.phone || '',
+          address: customer.address || '',
+          city: customer.city || '',
+          state: customer.state || 'Kerala',
+          pincode: customer.pincode || '',
+          wishlist: (customer.wishlist as string[]) || [],
+          joinedAt: customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : undefined,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('MongoDB getCustomerById fallback:', err);
+  }
+
+  return memoryCustomers.find((c) => c.id === id) || null;
+}
+
+export async function updateCustomerProfile(id: string, updates: Partial<CustomerUser>): Promise<CustomerUser | null> {
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      const customer = await CustomerModel.findByIdAndUpdate(
+        id,
+        { $set: updates },
+        { new: true }
+      ).lean();
+
+      if (customer) {
+        return {
+          id: customer._id.toString(),
+          googleId: customer.googleId,
+          name: customer.name,
+          email: customer.email,
+          avatar: customer.avatar,
+          provider: customer.provider || 'google',
+          phone: customer.phone || '',
+          address: customer.address || '',
+          city: customer.city || '',
+          state: customer.state || 'Kerala',
+          pincode: customer.pincode || '',
+          wishlist: (customer.wishlist as string[]) || [],
+          joinedAt: customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : undefined,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('MongoDB updateCustomerProfile fallback:', err);
+  }
+
+  const idx = memoryCustomers.findIndex((c) => c.id === id);
+  if (idx !== -1) {
+    memoryCustomers[idx] = { ...memoryCustomers[idx], ...updates };
+    return memoryCustomers[idx];
+  }
+  return null;
+}
+
+// --------------------------------------------------------------------------
+// Real-Time Customer Wishlist (DB Persistent Login-Wise)
+// --------------------------------------------------------------------------
+
+export async function getCustomerWishlist(userIdOrEmail: string): Promise<Product[]> {
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      const isMongoId = mongoose.isValidObjectId(userIdOrEmail);
+      const query = isMongoId
+        ? { $or: [{ _id: userIdOrEmail }, { email: userIdOrEmail.toLowerCase().trim() }] }
+        : { email: userIdOrEmail.toLowerCase().trim() };
+
+      const customer = await CustomerModel.findOne(query).lean();
+      const wishlistIds: string[] = (customer?.wishlist as string[]) || [];
+
+      if (!wishlistIds || wishlistIds.length === 0) {
+        return [];
+      }
+
+      const allProducts = await getProducts();
+      return allProducts.filter(p => wishlistIds.includes(p.id) || (p._id && wishlistIds.includes(p._id)));
+    }
+  } catch (err) {
+    console.warn('MongoDB getCustomerWishlist fallback:', err);
+  }
+
+  const clean = userIdOrEmail.toLowerCase().trim();
+  const cust = memoryCustomers.find(c => c.id === userIdOrEmail || c.email.toLowerCase() === clean);
+  const wIds = cust?.wishlist || [];
+  return memoryProducts.filter(p => wIds.includes(p.id));
+}
+
+export async function toggleCustomerWishlist(
+  userIdOrEmail: string,
+  productId: string
+): Promise<{ inWishlist: boolean; wishlistIds: string[]; wishlist: Product[] }> {
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      const isMongoId = mongoose.isValidObjectId(userIdOrEmail);
+      const query = isMongoId
+        ? { $or: [{ _id: userIdOrEmail }, { email: userIdOrEmail.toLowerCase().trim() }] }
+        : { email: userIdOrEmail.toLowerCase().trim() };
+
+      const customer = await CustomerModel.findOne(query);
+      if (customer) {
+        const currentList: string[] = (customer.wishlist as string[]) || [];
+        const exists = currentList.includes(productId);
+        let updatedList: string[];
+
+        if (exists) {
+          updatedList = currentList.filter(id => id !== productId);
+        } else {
+          updatedList = [...currentList, productId];
+        }
+
+        customer.wishlist = updatedList;
+        await customer.save();
+
+        const allProducts = await getProducts();
+        const wishlistProducts = allProducts.filter(p => updatedList.includes(p.id) || (p._id && updatedList.includes(p._id)));
+
+        return {
+          inWishlist: !exists,
+          wishlistIds: updatedList,
+          wishlist: wishlistProducts,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('MongoDB toggleCustomerWishlist fallback:', err);
+  }
+
+  // Memory fallback
+  const clean = userIdOrEmail.toLowerCase().trim();
+  let cust = memoryCustomers.find(c => c.id === userIdOrEmail || c.email.toLowerCase() === clean);
+  if (!cust) {
+    cust = {
+      id: userIdOrEmail,
+      email: userIdOrEmail,
+      name: 'Client',
+      provider: 'google',
+      wishlist: [],
+    };
+    memoryCustomers.push(cust);
+  }
+
+  const cur = cust.wishlist || [];
+  const exists = cur.includes(productId);
+  const next = exists ? cur.filter(id => id !== productId) : [...cur, productId];
+  cust.wishlist = next;
+
+  const wishlistProducts = memoryProducts.filter(p => next.includes(p.id));
+  return {
+    inWishlist: !exists,
+    wishlistIds: next,
+    wishlist: wishlistProducts,
+  };
+}
+
+export async function syncCustomerWishlist(
+  userIdOrEmail: string,
+  productIds: string[]
+): Promise<Product[]> {
+  if (!productIds || !productIds.length) {
+    return getCustomerWishlist(userIdOrEmail);
+  }
+
+  try {
+    const conn = await connectToDatabase();
+    if (conn) {
+      const isMongoId = mongoose.isValidObjectId(userIdOrEmail);
+      const query = isMongoId
+        ? { $or: [{ _id: userIdOrEmail }, { email: userIdOrEmail.toLowerCase().trim() }] }
+        : { email: userIdOrEmail.toLowerCase().trim() };
+
+      const customer = await CustomerModel.findOne(query);
+      if (customer) {
+        const current: string[] = (customer.wishlist as string[]) || [];
+        const merged = Array.from(new Set([...current, ...productIds]));
+        customer.wishlist = merged;
+        await customer.save();
+
+        const allProducts = await getProducts();
+        return allProducts.filter(p => merged.includes(p.id) || (p._id && merged.includes(p._id)));
+      }
+    }
+  } catch (err) {
+    console.warn('MongoDB syncCustomerWishlist fallback:', err);
+  }
+
+  const clean = userIdOrEmail.toLowerCase().trim();
+  const cust = memoryCustomers.find(c => c.id === userIdOrEmail || c.email.toLowerCase() === clean);
+  if (cust) {
+    const merged = Array.from(new Set([...(cust.wishlist || []), ...productIds]));
+    cust.wishlist = merged;
+    return memoryProducts.filter(p => merged.includes(p.id));
+  }
+
+  return [];
+}

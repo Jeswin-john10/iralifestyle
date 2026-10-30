@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getOrders, createOrder, updateOrderStatus, deleteOrder } from '@/lib/dbStore';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const orders = await getOrders();
+    const url = new URL(request.url);
+    const email = url.searchParams.get('email');
+    const orderId = url.searchParams.get('orderId');
+    const filter = email ? { email } : orderId ? { orderId } : undefined;
+    const orders = await getOrders(filter);
     return NextResponse.json({ success: true, count: orders.length, orders });
   } catch (error) {
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });

@@ -11,6 +11,7 @@ import CartDrawer from '@/components/CartDrawer';
 import CustomerAuthModal from '@/components/CustomerAuthModal';
 import CustomerProfileDrawer from '@/components/CustomerProfileDrawer';
 import ScrollReveal from '@/components/ScrollReveal';
+import Script from 'next/script';
 
 export const viewport: Viewport = {
   themeColor: '#1A1613',
@@ -167,6 +168,7 @@ export default function RootLayout({
             }),
           }}
         />
+        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
       </head>
       <body>
         <AuthProvider>
