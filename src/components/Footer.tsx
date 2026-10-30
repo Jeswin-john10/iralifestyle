@@ -17,7 +17,7 @@ import {
   Phone,
   Lock 
 } from 'lucide-react';
-import { InstagramIcon, FacebookIcon, YoutubeIcon, PinterestIcon } from './SocialIcons';
+import { InstagramIcon, FacebookIcon, LinkedinIcon, WhatsappIcon } from './SocialIcons';
 import { useAuth } from '@/context/AuthContext';
 
 export default function Footer() {
@@ -349,6 +349,7 @@ export default function Footer() {
                     rel="noreferrer" 
                     className="social-icon-luxury"
                     aria-label="Instagram"
+                    title="Follow on Instagram"
                   >
                     <InstagramIcon size={14} />
                   </a>
@@ -358,26 +359,29 @@ export default function Footer() {
                     rel="noreferrer" 
                     className="social-icon-luxury"
                     aria-label="Facebook"
+                    title="Follow on Facebook"
                   >
                     <FacebookIcon size={14} />
                   </a>
                   <a 
-                    href="https://pinterest.com" 
+                    href="https://linkedin.com" 
                     target="_blank" 
                     rel="noreferrer" 
                     className="social-icon-luxury"
-                    aria-label="Pinterest"
+                    aria-label="LinkedIn"
+                    title="Connect on LinkedIn"
                   >
-                    <PinterestIcon size={14} />
+                    <LinkedinIcon size={14} />
                   </a>
                   <a 
-                    href="https://youtube.com" 
+                    href="https://wa.me/919995466002" 
                     target="_blank" 
                     rel="noreferrer" 
                     className="social-icon-luxury"
-                    aria-label="YouTube"
+                    aria-label="WhatsApp"
+                    title="Chat on WhatsApp"
                   >
-                    <YoutubeIcon size={14} />
+                    <WhatsappIcon size={14} />
                   </a>
                 </div>
               </div>

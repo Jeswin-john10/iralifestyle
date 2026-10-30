@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createReview, getReviews, deleteReview, updateReviewStatus } from '@/lib/dbStore';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);

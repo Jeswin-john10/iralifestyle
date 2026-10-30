@@ -19,7 +19,6 @@ import {
   CheckCircle2, 
   Mail
 } from 'lucide-react';
-import { CATEGORIES, INITIAL_PRODUCTS } from '@/data/initialData';
 import { Product } from '@/types';
 import { useCart } from '@/context/CartContext';
 import QuickViewModal from '@/components/QuickViewModal';
@@ -123,7 +122,7 @@ const STORY_PROPOSITIONS = [
 
 export default function HomePage() {
   const { toggleWishlist, isInWishlist } = useCart();
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS.slice(0, 5));
+  const [products, setProducts] = useState<Product[]>([]);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [newsletterEmail, setNewsletterEmail] = useState('');
@@ -510,7 +509,7 @@ export default function HomePage() {
 
       {/* 3. FEATURED COLLECTION SECTION (DESIGNER ETHNIC WEAR SCROLLING & LUXURY DESIGN) */}
       <FeaturedCollection 
-        products={products.length > 0 ? products : INITIAL_PRODUCTS} 
+        products={products} 
         onQuickView={setQuickViewProduct} 
       />
 

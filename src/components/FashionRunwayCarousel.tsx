@@ -4,22 +4,37 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
-import { CATEGORIES } from '@/data/initialData';
+import { Category } from '@/types';
 
 export default function FashionRunwayCarousel() {
-  const [activeIndex, setActiveIndex] = useState(2); // Start with Sarees (or center index)
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const autoPlayRef = useRef<NodeJS.Timeout | null>(null);
 
-  const total = CATEGORIES.length;
+  useEffect(() => {
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.categories && data.categories.length > 0) {
+          setCategories(data.categories);
+          setActiveIndex(Math.min(2, data.categories.length - 1));
+        }
+      })
+      .catch((err) => console.warn('FashionRunwayCarousel fetch error:', err));
+  }, []);
+
+  const total = categories.length;
 
   const nextSlide = () => {
+    if (total === 0) return;
     setActiveIndex((prev) => (prev + 1) % total);
   };
 
   const prevSlide = () => {
+    if (total === 0) return;
     setActiveIndex((prev) => (prev - 1 + total) % total);
   };
 
@@ -59,7 +74,9 @@ export default function FashionRunwayCarousel() {
     setTimeout(() => setIsPaused(false), 3000);
   };
 
-  const activeCategory = CATEGORIES[activeIndex];
+  if (categories.length === 0) return null;
+
+  const activeCategory = categories[activeIndex] || categories[0];
 
   return (
     <div
@@ -82,7 +99,7 @@ export default function FashionRunwayCarousel() {
           transformStyle: 'preserve-3d',
         }}
       >
-        {CATEGORIES.map((cat, idx) => {
+        {categories.map((cat, idx) => {
           // Calculate relative position (-2, -1, 0, 1, 2)
           let diff = (idx - activeIndex + total) % total;
           if (diff > total / 2) diff -= total;
@@ -216,7 +233,7 @@ export default function FashionRunwayCarousel() {
 
         {/* Dots */}
         <div className="d-flex align-items-center gap-2">
-          {CATEGORIES.map((cat, i) => (
+          {categories.map((cat, i) => (
             <button
               key={cat.id}
               onClick={() => setActiveIndex(i)}

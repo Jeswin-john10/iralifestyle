@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 
 import { Suspense } from 'react';
-import { INITIAL_PRODUCTS } from '@/data/initialData';
 import ProductCard from '@/components/ProductCard';
 import { useAuth } from '@/context/AuthContext';
 
@@ -39,16 +38,13 @@ function ProductDetailContent() {
   const { addToCart, toggleWishlist, isInWishlist } = useCart();
   const { user, openAuthModal } = useAuth();
 
-  const initialProd = INITIAL_PRODUCTS.find((p) => p.id === id || p.slug === id) || null;
-  const [product, setProduct] = useState<Product | null>(initialProd);
-  const [relatedProducts, setRelatedProducts] = useState<Product[]>(() =>
-    initialProd ? INITIAL_PRODUCTS.filter((p) => p.id !== initialProd.id).slice(0, 4) : []
-  );
-  const [selectedImage, setSelectedImage] = useState<string>(initialProd?.image || '');
-  const [selectedSize, setSelectedSize] = useState<string>(initialProd?.sizes?.[0] || 'M');
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string>('');
+  const [selectedSize, setSelectedSize] = useState<string>('M');
   const [quantity, setQuantity] = useState<number>(1);
   const [added, setAdded] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(!initialProd);
+  const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'details' | 'fabric' | 'shipping' | 'reviews'>('details');
 
   // Reviews state
@@ -169,11 +165,19 @@ function ProductDetailContent() {
       });
       const data = await res.json();
       if (data.success && data.review) {
-        setReviews((prev) => [data.review, ...prev]);
+        setReviews((prev) => [data.review, ...prev.filter(r => (r._id || r.id) !== (data.review._id || data.review.id))]);
         setReviewSubmitted(true);
         setReviewComment('');
         setReviewName('');
         setReviewEmail('');
+        // Refresh product in real-time from DB
+        fetch(`/api/products/${id}`)
+          .then(res => res.json())
+          .then(freshData => {
+            if (freshData.product) setProduct(freshData.product);
+          })
+          .catch(() => {});
+
         setTimeout(() => {
           setReviewSubmitted(false);
           setShowReviewForm(false);
@@ -508,7 +512,7 @@ function ProductDetailContent() {
               }}
             >
               <Star size={13} color="#F59E0B" fill="#F59E0B" />
-              <span>CLIENT REVIEWS ({reviews.length})</span>
+              <span>CLIENT REVIEWS ({realtimeReviewsCount})</span>
             </button>
           </div>
 
@@ -822,32 +826,37 @@ function ProductDetailContent() {
                         className="p-3 p-sm-4 rounded-3 border transition"
                         style={{ backgroundColor: '#FFFFFF', borderColor: '#EDE8E0' }}
                       >
-                        <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                        {/* Responsive Review Header */}
+                        <div className="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center gap-2.5 pb-2.5 mb-2.5 border-bottom border-light-subtle">
                           <div className="d-flex align-items-center gap-2.5">
                             <div 
-                              className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold small flex-shrink-0"
-                              style={{ width: '38px', height: '38px', backgroundColor: '#9E7D47', fontSize: '0.85rem' }}
+                              className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold small flex-shrink-0 shadow-sm"
+                              style={{ width: '40px', height: '40px', backgroundColor: '#9E7D47', fontSize: '0.88rem' }}
                             >
                               {rev.customerName.charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div className="fw-semibold text-dark small d-flex align-items-center gap-2">
-                                <span>{rev.customerName}</span>
+                              <div className="d-flex flex-wrap align-items-center gap-1.5 gap-sm-2">
+                                <span className="fw-semibold text-dark small" style={{ fontSize: '0.86rem' }}>
+                                  {rev.customerName}
+                                </span>
                                 {rev.verifiedPurchase && (
                                   <span 
-                                    className="badge d-inline-flex align-items-center gap-1"
+                                    className="badge d-inline-flex align-items-center gap-1 px-2 py-0.5 rounded-pill"
                                     style={{
                                       backgroundColor: 'rgba(16, 185, 129, 0.12)',
                                       color: '#059669',
                                       fontSize: '0.66rem',
                                       border: '1px solid rgba(16, 185, 129, 0.25)',
+                                      whiteSpace: 'nowrap',
+                                      fontWeight: 500,
                                     }}
                                   >
                                     ✓ Verified Patron
                                   </span>
                                 )}
                               </div>
-                              <small className="text-muted" style={{ fontSize: '0.7rem' }}>
+                              <small className="text-muted d-block" style={{ fontSize: '0.72rem', marginTop: '1px' }}>
                                 {new Date(rev.createdAt).toLocaleDateString('en-IN', {
                                   day: 'numeric',
                                   month: 'short',
@@ -857,20 +866,26 @@ function ProductDetailContent() {
                             </div>
                           </div>
 
-                          {/* Star Rating */}
-                          <div className="d-flex text-warning">
-                            {[...Array(5)].map((_, i) => (
-                              <Star
-                                key={i}
-                                size={14}
-                                fill={i < rev.rating ? '#F59E0B' : 'none'}
-                                color="#F59E0B"
-                              />
-                            ))}
+                          {/* Star Rating & Numeric Score */}
+                          <div className="d-flex align-items-center gap-1.5 flex-shrink-0 ms-0 ms-sm-auto">
+                            <div className="d-flex text-warning">
+                              {[...Array(5)].map((_, i) => (
+                                <Star
+                                  key={i}
+                                  size={15}
+                                  fill={i < rev.rating ? '#F59E0B' : '#E5E7EB'}
+                                  color={i < rev.rating ? '#F59E0B' : '#D1D5DB'}
+                                />
+                              ))}
+                            </div>
+                            <span className="fw-bold small text-dark ms-1" style={{ fontSize: '0.78rem' }}>
+                              {rev.rating}.0
+                            </span>
                           </div>
                         </div>
 
-                        <p className="mb-0 text-dark small mt-2" style={{ lineHeight: '1.65', color: '#2B2622' }}>
+                        {/* Review Comment Body */}
+                        <p className="mb-0 text-dark small" style={{ lineHeight: '1.7', color: '#2B2622', wordBreak: 'break-word' }}>
                           {rev.comment}
                         </p>
                       </div>

@@ -51,7 +51,9 @@ import {
   ShieldAlert,
   Tag,
   Layers,
-  FolderTree
+  FolderTree,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface InquiryItem {
@@ -307,24 +309,38 @@ export default function AdminDashboardPage() {
     setDeliveredAuditPage(1);
   }, [deliveredSearchQuery, deliveredDateFrom, deliveredDateTo]);
 
-  // Add Product Form Modal
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newProd, setNewProd] = useState({
+  const initialNewProd = {
     title: '',
-    category: 'dresses',
+    category: 'set-saree',
     price: '',
     originalPrice: '',
     description: '',
     fabric: 'Pure Georgette with Silk Lining',
-    image: '/images/cat_dress.jpg',
+    care: 'Dry clean only',
+    image: '',
+    gallery: [] as string[],
+    sizes: ['S', 'M', 'L', 'XL'],
+    colors: ['Gold', 'Emerald'],
+    inStock: true,
     isFeatured: true,
-  });
+    isNewArrival: true,
+    bestseller: false,
+  };
+
+  // Add Product Form Modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newProd, setNewProd] = useState(initialNewProd);
+  const [isSubmittingProd, setIsSubmittingProd] = useState(false);
+  const [prodFormError, setProdFormError] = useState('');
+  const [editFormError, setEditFormError] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
   // Edit Product Form Modal
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Image Upload state
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState('');
 
   const showNotification = (msg: string, type: 'success' | 'delete' | 'info' = 'success') => {
@@ -453,7 +469,7 @@ export default function AdminDashboardPage() {
     window.location.href = '/admin/ira/login';
   };
 
-  // Cloudflare R2 Upload
+  // Cloudinary / Local Upload for Main Garment Image
   const handleFileUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
     isEdit = false
@@ -463,6 +479,8 @@ export default function AdminDashboardPage() {
 
     setUploadingImage(true);
     setUploadSuccessMsg('');
+    if (isEdit) setEditFormError('');
+    else setProdFormError('');
 
     try {
       const formData = new FormData();
@@ -474,58 +492,147 @@ export default function AdminDashboardPage() {
       });
 
       const data = await res.json();
-      if (data.success && data.url) {
+      if (res.ok && data.success && data.url) {
         if (isEdit && editingProduct) {
-          setEditingProduct({ ...editingProduct, image: data.url });
+          setEditingProduct({
+            ...editingProduct,
+            image: data.url,
+            gallery: editingProduct.gallery && editingProduct.gallery.length > 0
+              ? editingProduct.gallery
+              : [data.url],
+          });
         } else {
-          setNewProd((prev) => ({ ...prev, image: data.url }));
+          setNewProd((prev) => ({
+            ...prev,
+            image: data.url,
+            gallery: prev.gallery.length > 0 ? prev.gallery : [data.url],
+          }));
         }
         setUploadSuccessMsg(
-          `Uploaded to ${data.provider === 'cloudflare' ? 'Cloud Storage' : 'Local Storage'}`
+          data.provider === 'cloudinary'
+            ? '✓ Image uploaded to Cloudinary (CDN)'
+            : '✓ Image uploaded to Local Storage'
         );
+      } else {
+        const errMsg = data.error || data.message || 'Image upload failed';
+        if (isEdit) setEditFormError(errMsg);
+        else setProdFormError(errMsg);
       }
     } catch (err) {
       console.error('Upload failed', err);
+      const errMsg = 'Failed to connect to image upload service';
+      if (isEdit) setEditFormError(errMsg);
+      else setProdFormError(errMsg);
     } finally {
       setUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+
+  // Additional Gallery Images Upload
+  const handleGalleryUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    isEdit = false
+  ) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploadingGallery(true);
+    try {
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const newUrls: string[] = data.urls || (data.url ? [data.url] : []);
+        if (newUrls.length > 0) {
+          if (isEdit && editingProduct) {
+            setEditingProduct({
+              ...editingProduct,
+              gallery: [...(editingProduct.gallery || []), ...newUrls],
+            });
+          } else {
+            setNewProd((prev) => ({
+              ...prev,
+              gallery: [...prev.gallery, ...newUrls],
+            }));
+          }
+          showNotification(`${newUrls.length} gallery image(s) uploaded successfully!`);
+        }
+      }
+    } catch (err) {
+      console.error('Gallery upload failed', err);
+    } finally {
+      setUploadingGallery(false);
+      e.target.value = '';
     }
   };
 
   // Product Add
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProd.title || !newProd.price) return;
+    setProdFormError('');
+
+    if (!newProd.title.trim()) {
+      setProdFormError('Please enter a garment title.');
+      return;
+    }
+    const numPrice = Number(newProd.price);
+    if (isNaN(numPrice) || numPrice <= 0) {
+      setProdFormError('Please enter a valid price in Rupees (₹).');
+      return;
+    }
+    if (!newProd.image.trim()) {
+      setProdFormError('Please upload a garment image or provide a valid image URL.');
+      return;
+    }
+
+    setIsSubmittingProd(true);
 
     try {
+      const catObj = categories.find((c) => c.slug === newProd.category);
+      const categoryLabel = catObj
+        ? catObj.name
+        : newProd.category
+            .split('-')
+            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+            .join(' ');
+
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...newProd,
-          price: Number(newProd.price),
+          price: numPrice,
           originalPrice: newProd.originalPrice ? Number(newProd.originalPrice) : undefined,
-          categoryLabel: newProd.category.toUpperCase(),
+          categoryLabel,
+          gallery: newProd.gallery.length > 0 ? newProd.gallery : [newProd.image],
         }),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setShowAddModal(false);
-        setNewProd({
-          title: '',
-          category: 'dresses',
-          price: '',
-          originalPrice: '',
-          description: '',
-          fabric: 'Pure Georgette with Silk Lining',
-          image: '/images/cat_dress.jpg',
-          isFeatured: true,
-        });
+        setNewProd(initialNewProd);
+        setUploadSuccessMsg('');
+        setProdFormError('');
         showNotification('New garment successfully added to boutique catalog!');
         loadData();
+      } else {
+        setProdFormError(data.message || data.error || 'Failed to create product');
       }
     } catch (err) {
       console.error('Failed to create product', err);
+      setProdFormError('Server error while saving garment.');
+    } finally {
+      setIsSubmittingProd(false);
     }
   };
 
@@ -533,22 +640,54 @@ export default function AdminDashboardPage() {
   const handleUpdateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProduct) return;
+    setEditFormError('');
+
+    if (!editingProduct.title.trim()) {
+      setEditFormError('Garment title cannot be empty.');
+      return;
+    }
+    if (!editingProduct.price || editingProduct.price <= 0) {
+      setEditFormError('Please enter a valid price in Rupees (₹).');
+      return;
+    }
+
+    setIsSubmittingEdit(true);
 
     try {
+      const catObj = categories.find((c) => c.slug === editingProduct.category);
+      const categoryLabel = catObj
+        ? catObj.name
+        : editingProduct.category
+            .split('-')
+            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+            .join(' ');
+
       const res = await fetch(`/api/products/${editingProduct.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingProduct),
+        body: JSON.stringify({
+          ...editingProduct,
+          categoryLabel,
+          gallery: editingProduct.gallery && editingProduct.gallery.length > 0
+            ? editingProduct.gallery
+            : [editingProduct.image],
+        }),
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         setEditingProduct(null);
+        setEditFormError('');
         showNotification('Product details updated successfully!');
         loadData();
+      } else {
+        setEditFormError(data.message || data.error || 'Failed to update product');
       }
     } catch (err) {
       console.error('Failed to update product', err);
+      setEditFormError('Server error while updating product.');
+    } finally {
+      setIsSubmittingEdit(false);
     }
   };
 
@@ -770,7 +909,12 @@ export default function AdminDashboardPage() {
           const data = await res.json();
           if (data.success) {
             setReviews((prev) => prev.filter((r) => (r._id || r.id) !== id));
-            showNotification('Review removed successfully.', 'delete');
+            showNotification('Review removed successfully from database.', 'delete');
+            // Refresh products so updated rating and count reflect in real-time
+            fetch('/api/products')
+              .then(r => r.json())
+              .then(d => { if (d.products) setProducts(d.products); })
+              .catch(() => {});
           }
         } catch (err) {
           console.error('Failed to delete review', err);
@@ -792,9 +936,14 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (data.success) {
         setReviews((prev) =>
-          prev.map((r) => (r._id === id ? { ...r, status: nextStatus as any } : r))
+          prev.map((r) => ((r._id || r.id) === id ? { ...r, status: nextStatus as any } : r))
         );
         showNotification(`Review status changed to ${nextStatus}.`);
+        // Refresh products so updated rating and count reflect in real-time
+        fetch('/api/products')
+          .then(r => r.json())
+          .then(d => { if (d.products) setProducts(d.products); })
+          .catch(() => {});
       }
     } catch (err) {
       console.error('Failed to update review status', err);
@@ -803,7 +952,12 @@ export default function AdminDashboardPage() {
 
   const filteredReviews = useMemo(() => {
     return reviews.filter((r) => {
-      const matchesProduct = reviewProductFilter === 'all' || r.productId === reviewProductFilter;
+      let matchesProduct = reviewProductFilter === 'all';
+      if (!matchesProduct) {
+        const prod = products.find((p) => p.id === reviewProductFilter || p.slug === reviewProductFilter);
+        const validIds = prod ? [prod.id, prod.slug, (prod as any)._id].filter(Boolean) : [reviewProductFilter];
+        matchesProduct = validIds.includes(r.productId);
+      }
       const matchesSearch =
         !reviewSearch ||
         r.customerName.toLowerCase().includes(reviewSearch.toLowerCase()) ||
@@ -811,7 +965,7 @@ export default function AdminDashboardPage() {
         r.comment.toLowerCase().includes(reviewSearch.toLowerCase());
       return matchesProduct && matchesSearch;
     });
-  }, [reviews, reviewProductFilter, reviewSearch]);
+  }, [reviews, reviewProductFilter, reviewSearch, products]);
 
   // Copy all subscriber emails
   const handleCopySubscribers = () => {
@@ -821,6 +975,50 @@ export default function AdminDashboardPage() {
     showNotification(`Copied ${subscribers.length} subscriber email(s) to clipboard!`);
     setTimeout(() => setCopiedEmails(false), 2500);
   };
+
+  // Copy all unique customer emails across store touchpoints
+  const handleCopyAllCustomerEmails = () => {
+    const list = Array.from(uniqueTotalCustomerEmails).join(', ');
+    navigator.clipboard.writeText(list);
+    setCopiedEmails(true);
+    showNotification(`Copied ${uniqueTotalCustomerEmails.size} unique customer email(s) to clipboard!`);
+    setTimeout(() => setCopiedEmails(false), 2500);
+  };
+
+  // Unique customer emails extracted from all orders
+  const uniqueOrderCustomerEmails = useMemo(() => {
+    const emailSet = new Set<string>();
+    orders.forEach((o) => {
+      const email = (o.customer?.email || (o as any).customerEmail || '').trim().toLowerCase();
+      if (email && email.includes('@')) {
+        emailSet.add(email);
+      }
+    });
+    return emailSet;
+  }, [orders]);
+
+  // All unique customer emails across orders, subscribers and inquiries
+  const uniqueTotalCustomerEmails = useMemo(() => {
+    const emailSet = new Set<string>();
+    orders.forEach((o) => {
+      const email = (o.customer?.email || (o as any).customerEmail || '').trim().toLowerCase();
+      if (email && email.includes('@')) emailSet.add(email);
+    });
+    subscribers.forEach((s) => {
+      const email = (s.email || '').trim().toLowerCase();
+      if (email && email.includes('@')) emailSet.add(email);
+    });
+    inquiries.forEach((inq) => {
+      const email = (inq.email || '').trim().toLowerCase();
+      if (email && email.includes('@')) emailSet.add(email);
+    });
+    return emailSet;
+  }, [orders, subscribers, inquiries]);
+
+  // Total customer count (deduplicated customer email count)
+  const totalCustomerCount = useMemo(() => {
+    return uniqueTotalCustomerEmails.size;
+  }, [uniqueTotalCustomerEmails]);
 
   // Metrics
   const totalRevenue = useMemo(
@@ -1740,66 +1938,36 @@ export default function AdminDashboardPage() {
 
       {/* ================= ADMIN HEADER ================= */}
       <header
-        className="sticky-top w-100 px-2.5 px-sm-3 px-md-4 py-2 d-flex align-items-center justify-content-between"
+        className="sticky-top w-100 admin-header-bar d-flex align-items-center justify-content-between"
         style={{
-          background: 'linear-gradient(180deg, #1C1917 0%, #12100E 100%)',
-          borderBottom: '1px solid rgba(197, 168, 128, 0.28)',
-          boxShadow: '0 1px 0 rgba(197, 168, 128, 0.35) inset, 0 6px 24px rgba(0, 0, 0, 0.45)',
-          backdropFilter: 'blur(12px)',
           zIndex: 1050,
           color: '#FAF7F2',
-          minHeight: '60px',
         }}
       >
-        {/* Left: Hamburger + Logo + Brand Monogram */}
-        <div className="d-flex align-items-center gap-2 gap-sm-3">
+        {/* Left: Hamburger + Logo + Brand Title */}
+        <div className="d-flex align-items-center gap-2 gap-sm-3 min-w-0">
           {/* Mobile hamburger toggle */}
           <button
             onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-            className="btn d-lg-none d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-            style={{ 
-              width: '38px', 
-              height: '38px', 
-              border: '1px solid rgba(197, 168, 128, 0.4)', 
-              backgroundColor: 'rgba(255, 255, 255, 0.06)', 
-              color: '#C5A880',
-              padding: 0,
-              transition: 'all 0.2s ease',
-            }}
+            className="btn d-lg-none admin-header-menu-btn"
             aria-label="Toggle Navigation"
+            title="Toggle Navigation Menu"
           >
-            {mobileSidebarOpen ? <X size={19} /> : <Menu size={19} />}
+            {mobileSidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
 
           {/* Logo & Brand Title */}
-          <Link href="/admin/dashboard" className="d-flex align-items-center gap-2 gap-sm-2.5 text-decoration-none text-white">
-            <div 
-              className="d-flex align-items-center justify-content-center rounded-2 p-1"
-              style={{ 
-                position: 'relative', 
-                width: '36px', 
-                height: '42px', 
-                flexShrink: 0,
-                border: '1px solid rgba(197, 168, 128, 0.25)',
-                backgroundColor: 'rgba(255, 255, 255, 0.03)'
-              }}
-            >
-              <Image src="/images/logo.png" alt="IRA" fill sizes="36px" style={{ objectFit: 'contain' }} />
+          <Link href="/admin/dashboard" className="admin-header-logo-container">
+            <div className="admin-header-logo-box">
+              <Image src="/images/logo.png" alt="IRA" fill sizes="38px" style={{ objectFit: 'contain' }} priority />
             </div>
-            <div>
-              <div className="d-flex align-items-center gap-1.5">
-                <span 
-                  className="font-serif fw-bold text-white d-block" 
-                  style={{ 
-                    letterSpacing: '0.18em', 
-                    fontSize: '1.05rem',
-                    lineHeight: '1.2' 
-                  }}
-                >
+            <div className="min-w-0">
+              <div className="d-flex align-items-center gap-1.5 flex-nowrap">
+                <span className="admin-header-brand-title">
                   IRA LIFESTYLE
                 </span>
                 <span 
-                  className="badge rounded-pill d-none d-xl-inline-flex align-items-center gap-1"
+                  className="badge rounded-pill d-none d-xl-inline-flex align-items-center gap-1 flex-shrink-0"
                   style={{ 
                     backgroundColor: 'rgba(16, 185, 129, 0.12)', 
                     color: '#34D399', 
@@ -1812,10 +1980,10 @@ export default function AdminDashboardPage() {
                 </span>
               </div>
               <small 
-                className="d-none d-sm-flex align-items-center gap-1" 
+                className="d-none d-sm-flex align-items-center gap-1 text-truncate" 
                 style={{ fontSize: '0.7rem', color: '#C5A880', letterSpacing: '0.04em' }}
               >
-                <span>Guruvayoor & Thrissur Atelier</span>
+                <span>Guruvayoor &amp; Thrissur Atelier</span>
                 <span style={{ opacity: 0.5 }}>•</span>
                 <span style={{ color: 'rgba(250, 247, 242, 0.75)' }}>Studio Portal</span>
               </small>
@@ -1824,8 +1992,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Right: Admin Profile + Logout */}
-        <div className="d-flex align-items-center gap-1.5 gap-sm-2 gap-md-2.5">
-
+        <div className="d-flex align-items-center gap-2 gap-sm-2.5 flex-shrink-0">
           {/* Admin Profile Chip (Desktop) */}
           <div 
             className="d-none d-xl-flex align-items-center gap-2 px-2.5 py-1 rounded-pill"
@@ -1847,26 +2014,19 @@ export default function AdminDashboardPage() {
               IRA
             </div>
             <span className="text-white small fw-medium" style={{ fontSize: '0.74rem' }}>
-              Nikhil & Anju
+              Nikhil &amp; Anju
             </span>
           </div>
 
-          {/* Logout Button */}
+          {/* Logout Button: Symmetric circular touch target on mobile, expanding pill on desktop */}
           <button
             onClick={handleLogout}
-            className="btn btn-sm d-flex align-items-center gap-1.5 px-2.5 px-sm-3 py-1.5 rounded-pill"
-            style={{
-              backgroundColor: 'rgba(220, 38, 38, 0.12)',
-              color: '#F87171',
-              border: '1px solid rgba(220, 38, 38, 0.35)',
-              fontSize: '0.75rem',
-              letterSpacing: '0.03em',
-              transition: 'all 0.2s ease',
-            }}
+            className="btn btn-sm admin-header-logout-btn"
             title="Log Out of Administration"
+            aria-label="Log out of Administration"
           >
-            <LogOut size={13} />
-            <span className="d-none d-sm-inline">Logout</span>
+            <LogOut size={16} />
+            <span className="d-none d-sm-inline ms-1 fw-medium" style={{ fontSize: '0.78rem' }}>Logout</span>
           </button>
         </div>
       </header>
@@ -2060,7 +2220,7 @@ export default function AdminDashboardPage() {
               </span>
             </button>
 
-            {/* 5. Subscribers */}
+            {/* 5. Subscribers / Customer Emails */}
             <button
               onClick={() => { setActiveTab('subscribers'); setMobileSidebarOpen(false); }}
               className={`nav-link text-start d-flex align-items-center justify-content-between py-2 px-3 rounded ${
@@ -2074,10 +2234,10 @@ export default function AdminDashboardPage() {
             >
               <div className="d-flex align-items-center gap-2">
                 <Users size={17} />
-                <span>Subscriber List</span>
+                <span>Customer Emails</span>
               </div>
               <span className="badge rounded-pill bg-dark text-white border border-secondary" style={{ fontSize: '0.68rem' }}>
-                {subscribers.length}
+                {totalCustomerCount}
               </span>
             </button>
 
@@ -2167,15 +2327,33 @@ export default function AdminDashboardPage() {
               </p>
             </div>
 
-            <div className="d-flex align-items-center gap-2">
+            <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-sm-auto">
               <button
                 onClick={loadData}
                 disabled={loading}
-                className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1 bg-white"
+                className="btn btn-sm d-flex align-items-center gap-1.5 px-3 py-1.5 rounded-pill shadow-xs"
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  color: '#1A1816',
+                  border: '1px solid #D5C7B5',
+                  fontSize: '0.78rem',
+                  fontWeight: 500,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#1A1816';
+                  e.currentTarget.style.color = '#C5A880';
+                  e.currentTarget.style.borderColor = '#1A1816';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  e.currentTarget.style.color = '#1A1816';
+                  e.currentTarget.style.borderColor = '#D5C7B5';
+                }}
                 title="Refresh Store Data"
               >
-                <RefreshCw size={13} className={loading ? 'fa-spin' : ''} />
-                <span className="small">Refresh</span>
+                <RefreshCw size={13} className={loading ? 'spin' : ''} />
+                <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
               </button>
 
               {activeTab === 'products' && (
@@ -2268,13 +2446,33 @@ export default function AdminDashboardPage() {
                 <div className="col-12 col-sm-6 col-xl-3">
                   <div className="bg-white p-3 p-md-4 rounded-3 border shadow-sm h-100">
                     <div className="d-flex justify-content-between align-items-center text-muted mb-2">
-                      <span className="small text-uppercase fw-semibold" style={{ fontSize: '0.72rem' }}>VIP Subscribers</span>
+                      <span className="small text-uppercase fw-semibold" style={{ fontSize: '0.72rem' }}>Total Customers</span>
                       <div className="p-2 rounded-circle" style={{ backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
                         <Users size={20} color="#D97706" />
                       </div>
                     </div>
-                    <h3 className="fw-bold text-dark mb-1">{subscribers.length}</h3>
-                    <small className="text-muted">{inquiries.length} contact inquiries received</small>
+                    <div className="d-flex align-items-baseline gap-2 mb-1">
+                      <h3 className="fw-bold text-dark mb-0">{totalCustomerCount}</h3>
+                      <span className="badge bg-light text-muted border small" style={{ fontSize: '0.68rem' }}>
+                        Unique Emails
+                      </span>
+                    </div>
+                    <div className="d-flex align-items-center justify-content-between mt-1">
+                      <small className="text-muted text-truncate" style={{ fontSize: '0.74rem' }}>
+                        {uniqueOrderCustomerEmails.size > 0
+                          ? `${uniqueOrderCustomerEmails.size} order customer${uniqueOrderCustomerEmails.size > 1 ? 's' : ''} • ${subscribers.length} VIP`
+                          : `${subscribers.length} VIP subscriber${subscribers.length > 1 ? 's' : ''} • ${inquiries.length} inquiries`}
+                      </small>
+                      <button
+                        type="button"
+                        onClick={handleCopyAllCustomerEmails}
+                        className="btn btn-sm btn-link p-0 text-decoration-none text-muted"
+                        style={{ fontSize: '0.7rem' }}
+                        title="Copy all customer emails"
+                      >
+                        Copy
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2852,7 +3050,7 @@ export default function AdminDashboardPage() {
                   />
                 </div>
 
-                <div className="d-flex align-items-center gap-2">
+                <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-sm-auto justify-content-between justify-content-sm-end">
                   <span className="small text-muted">Showing {filteredProducts.length} garments</span>
                   <button
                     onClick={() => setShowAddModal(true)}
@@ -2883,7 +3081,7 @@ export default function AdminDashboardPage() {
                         <td className="ps-3">
                           <div className="d-flex align-items-center gap-3">
                             <div style={{ position: 'relative', width: '45px', height: '58px', borderRadius: '4px', overflow: 'hidden', flexShrink: 0, border: '1px solid #E5E0D8' }}>
-                              <Image src={prod.image} alt={prod.title} fill sizes="45px" style={{ objectFit: 'cover' }} />
+                              <Image src={prod.image || '/images/cat_dress.jpg'} alt={prod.title} fill sizes="45px" style={{ objectFit: 'cover' }} />
                             </div>
                             <div>
                               <span className="fw-semibold text-dark d-block">{prod.title}</span>
@@ -2964,7 +3162,7 @@ export default function AdminDashboardPage() {
                   <div key={prod.id} className="bg-light p-3 rounded-3 border">
                     <div className="d-flex gap-3 align-items-start mb-2">
                       <div style={{ position: 'relative', width: '55px', height: '72px', borderRadius: '4px', overflow: 'hidden', flexShrink: 0, border: '1px solid #E5E0D8' }}>
-                        <Image src={prod.image} alt={prod.title} fill sizes="55px" style={{ objectFit: 'cover' }} />
+                        <Image src={prod.image || '/images/cat_dress.jpg'} alt={prod.title} fill sizes="55px" style={{ objectFit: 'cover' }} />
                       </div>
                       <div className="flex-grow-1">
                         <div className="d-flex justify-content-between align-items-start gap-1">
@@ -3425,7 +3623,7 @@ export default function AdminDashboardPage() {
                     >
                       <option value="all">All Garments ({reviews.length} Total Reviews)</option>
                       {products.map((p) => {
-                        const pRevCount = reviews.filter((r) => r.productId === p.id).length;
+                        const pRevCount = reviews.filter((r) => r.productId === p.id || r.productId === p.slug || ((p as any)._id && r.productId === (p as any)._id)).length;
                         return (
                           <option key={p.id} value={p.id}>
                             {p.title} ({pRevCount} review{pRevCount !== 1 ? 's' : ''})
@@ -4001,13 +4199,14 @@ export default function AdminDashboardPage() {
 
                 <div className="d-flex align-items-center gap-2">
                   <span className="badge px-3 py-2" style={{ backgroundColor: '#C5A880', color: '#151311', fontSize: '0.8rem' }}>
-                    {subscribers.length} Subscribers
+                    {totalCustomerCount} Customer Emails ({subscribers.length} VIP)
                   </span>
                   <button
-                    onClick={handleCopySubscribers}
+                    onClick={handleCopyAllCustomerEmails}
                     className="btn btn-sm btn-dark d-flex align-items-center gap-1"
+                    title="Copy all unique customer emails to clipboard"
                   >
-                    <Copy size={13} /> {copiedEmails ? 'Copied!' : 'Copy All Emails'}
+                    <Copy size={13} /> {copiedEmails ? 'Copied!' : 'Copy Customer Emails'}
                   </button>
                 </div>
               </div>
@@ -4176,126 +4375,30 @@ export default function AdminDashboardPage() {
 
               {/* Main Report Section with Period Tabs (Date-wise, Month-wise, Year-wise) */}
               <div className="bg-white rounded-4 border shadow-sm p-3 p-md-4" style={{ borderColor: 'rgba(197, 168, 128, 0.22)' }}>
-                <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
-                  <div>
-                    <h5 className="font-serif fw-bold text-dark mb-1" style={{ letterSpacing: '0.01em' }}>
-                      Sales & Revenue Breakdown Reports
-                    </h5>
-                    <p className="text-muted small mb-0">
-                      Granular periodic performance analysis for IRA Lifestyle Studio.
-                    </p>
-                  </div>
-
-                  {/* Actions & Filters wrapper: full width on mobile, auto on desktop */}
-                  {/* Actions & Filters wrapper: full width on mobile, auto on desktop */}
-                  <div className="d-flex flex-column flex-sm-row flex-wrap align-items-stretch align-items-sm-center gap-2.5 w-100 w-lg-auto justify-content-start justify-content-lg-end">
-                    {/* Period Tabs: Segmented luxury pill bar with horizontal scroll on small devices */}
-                    <div 
-                      className="d-flex align-items-center p-1 rounded-pill flex-nowrap overflow-x-auto w-100 w-sm-auto"
-                      style={{ 
-                        backgroundColor: '#F4EFE6', 
-                        border: '1px solid rgba(197, 168, 128, 0.35)',
-                        gap: '3px',
-                        maxWidth: '100%',
-                        scrollbarWidth: 'none',
-                        msOverflowStyle: 'none',
-                        WebkitOverflowScrolling: 'touch',
-                      }}
-                      role="tablist"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setReportView('daily')}
-                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0 flex-grow-1 flex-sm-grow-0"
-                        style={{
-                          backgroundColor: reportView === 'daily' ? '#181513' : 'transparent',
-                          color: reportView === 'daily' ? '#FAF7F2' : '#5A524C',
-                          fontWeight: reportView === 'daily' ? 600 : 500,
-                          fontSize: '0.76rem',
-                          padding: '5px 11px',
-                          border: 'none',
-                          whiteSpace: 'nowrap',
-                          boxShadow: reportView === 'daily' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
-                          transition: 'all 0.2s ease',
-                        }}
-                      >
-                        <Calendar size={13} color={reportView === 'daily' ? '#C5A880' : 'currentColor'} /> 
-                        <span>Date-wise</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setReportView('monthly')}
-                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0 flex-grow-1 flex-sm-grow-0"
-                        style={{
-                          backgroundColor: reportView === 'monthly' ? '#181513' : 'transparent',
-                          color: reportView === 'monthly' ? '#FAF7F2' : '#5A524C',
-                          fontWeight: reportView === 'monthly' ? 600 : 500,
-                          fontSize: '0.76rem',
-                          padding: '5px 11px',
-                          border: 'none',
-                          whiteSpace: 'nowrap',
-                          boxShadow: reportView === 'monthly' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
-                          transition: 'all 0.2s ease',
-                        }}
-                      >
-                        <BarChart3 size={13} color={reportView === 'monthly' ? '#C5A880' : 'currentColor'} /> 
-                        <span>Month-wise</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setReportView('yearly')}
-                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0 flex-grow-1 flex-sm-grow-0"
-                        style={{
-                          backgroundColor: reportView === 'yearly' ? '#181513' : 'transparent',
-                          color: reportView === 'yearly' ? '#FAF7F2' : '#5A524C',
-                          fontWeight: reportView === 'yearly' ? 600 : 500,
-                          fontSize: '0.76rem',
-                          padding: '5px 11px',
-                          border: 'none',
-                          whiteSpace: 'nowrap',
-                          boxShadow: reportView === 'yearly' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
-                          transition: 'all 0.2s ease',
-                        }}
-                      >
-                        <TrendingUp size={13} color={reportView === 'yearly' ? '#C5A880' : 'currentColor'} /> 
-                        <span>Year-wise</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setReportView('custom')}
-                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0 flex-grow-1 flex-sm-grow-0"
-                        style={{
-                          backgroundColor: reportView === 'custom' ? '#181513' : 'transparent',
-                          color: reportView === 'custom' ? '#FAF7F2' : '#5A524C',
-                          fontWeight: reportView === 'custom' ? 600 : 500,
-                          fontSize: '0.76rem',
-                          padding: '5px 11px',
-                          border: 'none',
-                          whiteSpace: 'nowrap',
-                          boxShadow: reportView === 'custom' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
-                          transition: 'all 0.2s ease',
-                        }}
-                      >
-                        <Filter size={13} color={reportView === 'custom' ? '#C5A880' : 'currentColor'} /> 
-                        <span>Custom Date</span>
-                      </button>
+                {/* Clean, fully responsive header block */}
+                <div className="d-flex flex-column gap-3 pb-3 border-bottom mb-3">
+                  <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                    <div>
+                      <h5 className="font-serif fw-bold text-dark mb-1" style={{ letterSpacing: '0.01em' }}>
+                        Sales & Revenue Breakdown Reports
+                      </h5>
+                      <p className="text-muted small mb-0">
+                        Granular periodic performance analysis for IRA Lifestyle Studio.
+                      </p>
                     </div>
 
-                    {/* Action buttons cluster: wrap gracefully on mobile */}
-                    <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-sm-auto">
+                    {/* Action buttons cluster: responsive wrap on mobile */}
+                    <div className="d-flex flex-wrap align-items-center gap-2 w-100 w-md-auto justify-content-start justify-content-md-end">
                       {/* Delivered Orders Audit Modal Trigger */}
                       <button
                         onClick={() => setShowDeliveredModal(true)}
-                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-sm-grow-0"
+                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-md-grow-0"
                         style={{
                           backgroundColor: '#181513',
                           color: '#C5A880',
                           border: '1px solid rgba(197, 168, 128, 0.45)',
                           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                          fontSize: '0.76rem',
+                          fontSize: '0.78rem',
                           whiteSpace: 'nowrap',
                           transition: 'all 0.2s ease',
                         }}
@@ -4314,13 +4417,13 @@ export default function AdminDashboardPage() {
                       {/* Export Styled Excel Button */}
                       <button
                         onClick={exportBreakdownExcel}
-                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-sm-grow-0"
+                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-md-grow-0"
                         style={{
                           backgroundColor: '#FFFFFF',
                           color: '#181513',
                           border: '1px solid rgba(197, 168, 128, 0.45)',
                           boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-                          fontSize: '0.76rem',
+                          fontSize: '0.78rem',
                           whiteSpace: 'nowrap',
                           transition: 'all 0.2s ease',
                         }}
@@ -4333,13 +4436,13 @@ export default function AdminDashboardPage() {
                       {/* Copy/Export Summary Button */}
                       <button
                         onClick={handleCopyReport}
-                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-sm-grow-0"
+                        className="btn btn-sm rounded-pill fw-semibold d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 flex-grow-1 flex-md-grow-0"
                         style={{ 
                           background: 'linear-gradient(135deg, #C5A880 0%, #B69466 100%)',
                           color: '#151311',
                           border: '1px solid rgba(197, 168, 128, 0.4)',
                           boxShadow: '0 2px 8px rgba(197, 168, 128, 0.25)',
-                          fontSize: '0.76rem',
+                          fontSize: '0.78rem',
                           whiteSpace: 'nowrap',
                           transition: 'all 0.2s ease',
                         }}
@@ -4347,6 +4450,107 @@ export default function AdminDashboardPage() {
                         {copiedReport ? <Check size={13} /> : <Copy size={13} />}
                         <span>{copiedReport ? 'Copied!' : 'Copy Summary'}</span>
                       </button>
+                    </div>
+                  </div>
+
+                  {/* Period Tabs: Dedicated segmented pill control */}
+                  <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                    <div 
+                      className="d-inline-flex align-items-center p-1 rounded-pill flex-nowrap overflow-x-auto"
+                      style={{ 
+                        backgroundColor: '#F4EFE6', 
+                        border: '1px solid rgba(197, 168, 128, 0.35)',
+                        gap: '4px',
+                        maxWidth: '100%',
+                        scrollbarWidth: 'none',
+                        msOverflowStyle: 'none',
+                        WebkitOverflowScrolling: 'touch',
+                      }}
+                      role="tablist"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setReportView('daily')}
+                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0"
+                        style={{
+                          backgroundColor: reportView === 'daily' ? '#181513' : 'transparent',
+                          color: reportView === 'daily' ? '#FAF7F2' : '#5A524C',
+                          fontWeight: reportView === 'daily' ? 600 : 500,
+                          fontSize: '0.76rem',
+                          padding: '5px 12px',
+                          border: 'none',
+                          whiteSpace: 'nowrap',
+                          boxShadow: reportView === 'daily' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <Calendar size={13} color={reportView === 'daily' ? '#C5A880' : 'currentColor'} /> 
+                        <span>Date-wise</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setReportView('monthly')}
+                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0"
+                        style={{
+                          backgroundColor: reportView === 'monthly' ? '#181513' : 'transparent',
+                          color: reportView === 'monthly' ? '#FAF7F2' : '#5A524C',
+                          fontWeight: reportView === 'monthly' ? 600 : 500,
+                          fontSize: '0.76rem',
+                          padding: '5px 12px',
+                          border: 'none',
+                          whiteSpace: 'nowrap',
+                          boxShadow: reportView === 'monthly' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <BarChart3 size={13} color={reportView === 'monthly' ? '#C5A880' : 'currentColor'} /> 
+                        <span>Month-wise</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setReportView('yearly')}
+                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0"
+                        style={{
+                          backgroundColor: reportView === 'yearly' ? '#181513' : 'transparent',
+                          color: reportView === 'yearly' ? '#FAF7F2' : '#5A524C',
+                          fontWeight: reportView === 'yearly' ? 600 : 500,
+                          fontSize: '0.76rem',
+                          padding: '5px 12px',
+                          border: 'none',
+                          whiteSpace: 'nowrap',
+                          boxShadow: reportView === 'yearly' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <TrendingUp size={13} color={reportView === 'yearly' ? '#C5A880' : 'currentColor'} /> 
+                        <span>Year-wise</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setReportView('custom')}
+                        className="btn btn-sm rounded-pill d-flex align-items-center justify-content-center gap-1.5 flex-shrink-0"
+                        style={{
+                          backgroundColor: reportView === 'custom' ? '#181513' : 'transparent',
+                          color: reportView === 'custom' ? '#FAF7F2' : '#5A524C',
+                          fontWeight: reportView === 'custom' ? 600 : 500,
+                          fontSize: '0.76rem',
+                          padding: '5px 12px',
+                          border: 'none',
+                          whiteSpace: 'nowrap',
+                          boxShadow: reportView === 'custom' ? '0 2px 6px rgba(0,0,0,0.18)' : 'none',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <Filter size={13} color={reportView === 'custom' ? '#C5A880' : 'currentColor'} /> 
+                        <span>Custom Date</span>
+                      </button>
+                    </div>
+
+                    <div className="small text-muted d-none d-sm-block">
+                      Viewing <span className="fw-semibold text-dark text-capitalize">{reportView}</span> performance analysis
                     </div>
                   </div>
                 </div>
@@ -5132,7 +5336,7 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Modal Table Action Bar */}
-            <div className="d-flex justify-content-between align-items-center mb-2.5">
+            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2.5">
               <span className="small text-muted">
                 Showing <strong className="text-dark">{deliveredOrdersData.totalOrders}</strong> delivered record(s)
               </span>
@@ -5141,7 +5345,7 @@ export default function AdminDashboardPage() {
               <button
                 onClick={exportDeliveredExcel}
                 disabled={deliveredOrdersData.totalOrders === 0}
-                className="btn btn-sm rounded-pill fw-bold text-dark d-flex align-items-center gap-1.5 px-3 py-1.5 shadow-sm"
+                className="btn btn-sm rounded-pill fw-bold text-dark d-flex align-items-center justify-content-center gap-1.5 px-3 py-1.5 shadow-sm w-100 w-sm-auto"
                 style={{ 
                   background: 'linear-gradient(135deg, #C5A880 0%, #B69466 100%)',
                   border: '1px solid rgba(197, 168, 128, 0.6)',
@@ -5333,15 +5537,25 @@ export default function AdminDashboardPage() {
         >
           <div
             className="bg-white rounded-3 shadow-2xl p-4 p-md-5 w-100 overflow-auto"
-            style={{ maxWidth: '640px', maxHeight: '90vh', border: '1px solid #C5A880' }}
+            style={{ maxWidth: '680px', maxHeight: '92vh', border: '1px solid #C5A880' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="d-flex justify-content-between align-items-center pb-3 border-bottom mb-4">
-              <h4 className="font-serif mb-0 text-dark fw-bold">Add Luxury Garment</h4>
+            <div className="d-flex justify-content-between align-items-center pb-3 border-bottom mb-3">
+              <div>
+                <h4 className="font-serif mb-0 text-dark fw-bold">Add Luxury Garment</h4>
+                <small className="text-muted">Publish a new handcrafted piece to boutique collection</small>
+              </div>
               <button onClick={() => setShowAddModal(false)} className="btn btn-link text-dark p-0">
                 <X size={20} />
               </button>
             </div>
+
+            {prodFormError && (
+              <div className="alert alert-danger py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+                <ShieldAlert size={16} className="text-danger flex-shrink-0" />
+                <span>{prodFormError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleCreateProduct} className="d-flex flex-column gap-3">
               <div>
@@ -5396,6 +5610,7 @@ export default function AdminDashboardPage() {
                   <input
                     type="number"
                     required
+                    min="1"
                     value={newProd.price}
                     onChange={(e) => setNewProd({ ...newProd, price: e.target.value })}
                     placeholder="2999"
@@ -5409,6 +5624,7 @@ export default function AdminDashboardPage() {
                   <label className="form-label small fw-semibold">Original Price (₹) (Optional)</label>
                   <input
                     type="number"
+                    min="1"
                     value={newProd.originalPrice}
                     onChange={(e) => setNewProd({ ...newProd, originalPrice: e.target.value })}
                     placeholder="4999"
@@ -5427,27 +5643,199 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Upload */}
-              <div>
-                <label className="form-label small fw-semibold">Garment Image & Cloudflare Upload</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileUpload(e, false)}
-                  className="form-control mb-2"
-                />
-                {uploadingImage && <small className="text-muted">Uploading image...</small>}
-                {uploadSuccessMsg && <small className="text-success d-block">{uploadSuccessMsg}</small>}
+              {/* Cloudinary Image Upload Section */}
+              <div className="p-3 bg-light rounded-3 border">
+                <label className="form-label small fw-semibold d-flex justify-content-between align-items-center mb-2">
+                  <span>Primary Garment Image *</span>
+                  <span className="badge bg-white text-dark border" style={{ fontSize: '0.68rem' }}>Cloudinary CDN</span>
+                </label>
 
-                <div className="mt-2">
-                  <label className="form-label small text-muted">Or Direct Image URL</label>
+                {newProd.image ? (
+                  <div className="d-flex align-items-center gap-3 p-2 bg-white rounded-3 border mb-2">
+                    <div style={{ position: 'relative', width: '64px', height: '80px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0, border: '1px solid #C5A880' }}>
+                      <img src={newProd.image} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div className="flex-grow-1 overflow-hidden">
+                      <span className="small fw-semibold text-dark d-block text-truncate">Image Ready</span>
+                      <small className="text-muted text-truncate d-block" style={{ fontSize: '0.72rem' }}>{newProd.image}</small>
+                      <span className="badge bg-success-subtle text-success border border-success-subtle mt-1" style={{ fontSize: '0.68rem' }}>
+                        ✓ Ready to publish
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setNewProd({ ...newProd, image: '' })}
+                      className="btn btn-sm btn-outline-danger p-1"
+                      title="Remove Image"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border border-dashed rounded-3 p-3 text-center bg-white mb-2">
+                    <input
+                      type="file"
+                      id="newProdFileInput"
+                      accept="image/*"
+                      onChange={(e) => handleFileUpload(e, false)}
+                      className="d-none"
+                    />
+                    <label htmlFor="newProdFileInput" className="btn btn-sm btn-outline-dark d-inline-flex align-items-center gap-2 mb-1" style={{ cursor: 'pointer' }}>
+                      <Upload size={14} />
+                      {uploadingImage ? 'Uploading to Cloudinary...' : 'Upload Image to Cloudinary'}
+                    </label>
+                    <div className="small text-muted" style={{ fontSize: '0.75rem' }}>
+                      Fast upload to Cloud CDN with automatic optimization
+                    </div>
+                  </div>
+                )}
+
+                {uploadingImage && (
+                  <div className="small text-primary d-flex align-items-center gap-1.5 mb-2">
+                    <RefreshCw size={13} className="spin" /> Uploading image to Cloudinary storage...
+                  </div>
+                )}
+                {uploadSuccessMsg && !uploadingImage && (
+                  <div className="small text-success fw-semibold mb-2">{uploadSuccessMsg}</div>
+                )}
+
+                <div>
+                  <label className="form-label small text-muted mb-1" style={{ fontSize: '0.75rem' }}>Or Direct Image URL</label>
                   <input
-                    type="text"
+                    type="url"
                     value={newProd.image}
                     onChange={(e) => setNewProd({ ...newProd, image: e.target.value })}
+                    placeholder="https://res.cloudinary.com/... or /images/..."
                     className="form-control form-control-sm"
                   />
                 </div>
+
+                {/* Additional Multi-Angle Gallery Photos */}
+                <div className="mt-3 pt-2.5 border-top">
+                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div>
+                      <label className="form-label small fw-semibold mb-0" style={{ fontSize: '0.82rem' }}>
+                        Additional Gallery Photos
+                      </label>
+                      <small className="text-muted d-block" style={{ fontSize: '0.72rem' }}>
+                        Optional multi-angle garment photos
+                      </small>
+                    </div>
+                    <label
+                      htmlFor="newGalleryInput"
+                      className="btn btn-sm d-inline-flex align-items-center gap-1.5 px-3 py-1 rounded-pill text-nowrap"
+                      style={{
+                        fontSize: '0.75rem',
+                        backgroundColor: '#FFFFFF',
+                        color: '#1A1816',
+                        border: '1px solid #C5A880',
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <Plus size={13} color="#9E7D47" />
+                      <span>Add Photos</span>
+                    </label>
+                    <input
+                      type="file"
+                      id="newGalleryInput"
+                      multiple
+                      accept="image/*"
+                      onChange={(e) => handleGalleryUpload(e, false)}
+                      className="d-none"
+                    />
+                  </div>
+                  {newProd.gallery && newProd.gallery.length > 0 && (
+                    <div className="d-flex flex-wrap gap-2 pt-1">
+                      {newProd.gallery.map((url, idx) => (
+                        <div key={idx} className="position-relative border rounded" style={{ width: '48px', height: '60px', overflow: 'hidden' }}>
+                          <img src={url} alt={`Angle ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button
+                            type="button"
+                            onClick={() => setNewProd({ ...newProd, gallery: newProd.gallery.filter((_, i) => i !== idx) })}
+                            className="position-absolute top-0 end-0 bg-danger text-white border-0 p-0 d-flex align-items-center justify-content-center"
+                            style={{ width: '16px', height: '16px', fontSize: '10px' }}
+                            title="Remove Photo"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {uploadingGallery && (
+                    <div className="small text-primary mt-1" style={{ fontSize: '0.75rem' }}>
+                      <RefreshCw size={11} className="spin me-1" /> Uploading gallery images...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sizes Selection with Responsive Spacing & Controls */}
+              <div>
+                <div className="d-flex justify-content-between align-items-center mb-1.5">
+                  <label className="form-label small fw-semibold mb-0">Available Sizes</label>
+                  <div className="d-flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNewProd({ ...newProd, sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Free Size'] })}
+                      className="btn btn-link p-0 text-muted small text-decoration-none"
+                      style={{ fontSize: '0.72rem' }}
+                    >
+                      Select All
+                    </button>
+                    <span className="text-muted" style={{ fontSize: '0.72rem' }}>•</span>
+                    <button
+                      type="button"
+                      onClick={() => setNewProd({ ...newProd, sizes: [] })}
+                      className="btn btn-link p-0 text-muted small text-decoration-none"
+                      style={{ fontSize: '0.72rem' }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="d-flex flex-wrap align-items-center" style={{ gap: '8px' }}>
+                  {['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Free Size'].map((sz) => {
+                    const isSelected = newProd.sizes.includes(sz);
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setNewProd({ ...newProd, sizes: newProd.sizes.filter((s) => s !== sz) });
+                          } else {
+                            setNewProd({ ...newProd, sizes: [...newProd.sizes, sz] });
+                          }
+                        }}
+                        className="btn btn-sm d-inline-flex align-items-center justify-content-center fw-semibold"
+                        style={{
+                          minWidth: '42px',
+                          height: '34px',
+                          padding: '0 12px',
+                          borderRadius: '6px',
+                          fontSize: '0.78rem',
+                          backgroundColor: isSelected ? '#1A1816' : '#FFFFFF',
+                          color: isSelected ? '#FAF7F2' : '#332E2A',
+                          border: isSelected ? '1px solid #1A1816' : '1px solid #D5C7B5',
+                          boxShadow: isSelected ? '0 2px 5px rgba(0,0,0,0.18)' : '0 1px 2px rgba(0,0,0,0.04)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                        title={isSelected ? `Remove ${sz}` : `Add ${sz}`}
+                      >
+                        {sz}
+                      </button>
+                    );
+                  })}
+                </div>
+                <small className="text-muted mt-1 d-block" style={{ fontSize: '0.72rem' }}>
+                  Selected: {newProd.sizes.length > 0 ? newProd.sizes.join(', ') : 'None'}
+                </small>
               </div>
 
               <div>
@@ -5456,34 +5844,78 @@ export default function AdminDashboardPage() {
                   rows={3}
                   value={newProd.description}
                   onChange={(e) => setNewProd({ ...newProd, description: e.target.value })}
-                  placeholder="Handcrafted pure zari embroidery..."
+                  placeholder="Handcrafted pure zari embroidery crafted for timeless luxury..."
                   className="form-control"
                 />
               </div>
 
-              <div className="form-check">
-                <input
-                  type="checkbox"
-                  id="featuredCheck"
-                  checked={newProd.isFeatured}
-                  onChange={(e) => setNewProd({ ...newProd, isFeatured: e.target.checked })}
-                  className="form-check-input"
-                />
-                <label htmlFor="featuredCheck" className="form-check-label small fw-semibold">
-                  Feature on Homepage Showcase
-                </label>
+              <div className="row g-3">
+                <div className="col-4">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      id="featuredCheck"
+                      checked={newProd.isFeatured}
+                      onChange={(e) => setNewProd({ ...newProd, isFeatured: e.target.checked })}
+                      className="form-check-input"
+                    />
+                    <label htmlFor="featuredCheck" className="form-check-label small fw-semibold">
+                      Featured
+                    </label>
+                  </div>
+                </div>
+                <div className="col-4">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      id="newArrivalCheck"
+                      checked={newProd.isNewArrival}
+                      onChange={(e) => setNewProd({ ...newProd, isNewArrival: e.target.checked })}
+                      className="form-check-input"
+                    />
+                    <label htmlFor="newArrivalCheck" className="form-check-label small fw-semibold">
+                      New Arrival
+                    </label>
+                  </div>
+                </div>
+                <div className="col-4">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      id="inStockCheck"
+                      checked={newProd.inStock}
+                      onChange={(e) => setNewProd({ ...newProd, inStock: e.target.checked })}
+                      className="form-check-input"
+                    />
+                    <label htmlFor="inStockCheck" className="form-check-label small fw-semibold">
+                      In Stock
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <div className="d-flex justify-content-end gap-2 pt-3 border-top mt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-outline-secondary">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="btn btn-outline-secondary"
+                  disabled={isSubmittingProd}
+                >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn text-dark fw-bold px-4"
+                  disabled={isSubmittingProd || uploadingImage}
+                  className="btn text-dark fw-bold px-4 d-flex align-items-center gap-2"
                   style={{ backgroundColor: '#C5A880' }}
                 >
-                  Publish Garment
+                  {isSubmittingProd ? (
+                    <>
+                      <RefreshCw size={14} className="spin" /> Publishing...
+                    </>
+                  ) : (
+                    'Publish Garment'
+                  )}
                 </button>
               </div>
             </form>
@@ -5500,15 +5932,25 @@ export default function AdminDashboardPage() {
         >
           <div
             className="bg-white rounded-3 shadow-2xl p-4 p-md-5 w-100 overflow-auto"
-            style={{ maxWidth: '640px', maxHeight: '90vh', border: '1px solid #C5A880' }}
+            style={{ maxWidth: '680px', maxHeight: '92vh', border: '1px solid #C5A880' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="d-flex justify-content-between align-items-center pb-3 border-bottom mb-4">
-              <h4 className="font-serif mb-0 text-dark fw-bold">Edit Luxury Garment</h4>
+            <div className="d-flex justify-content-between align-items-center pb-3 border-bottom mb-3">
+              <div>
+                <h4 className="font-serif mb-0 text-dark fw-bold">Edit Luxury Garment</h4>
+                <small className="text-muted">Modify SKU: {editingProduct.id}</small>
+              </div>
               <button onClick={() => setEditingProduct(null)} className="btn btn-link text-dark p-0">
                 <X size={20} />
               </button>
             </div>
+
+            {editFormError && (
+              <div className="alert alert-danger py-2 px-3 small d-flex align-items-center gap-2 mb-3">
+                <ShieldAlert size={16} className="text-danger flex-shrink-0" />
+                <span>{editFormError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleUpdateProduct} className="d-flex flex-column gap-3">
               <div>
@@ -5562,6 +6004,7 @@ export default function AdminDashboardPage() {
                   <input
                     type="number"
                     required
+                    min="1"
                     value={editingProduct.price}
                     onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
                     className="form-control"
@@ -5574,6 +6017,7 @@ export default function AdminDashboardPage() {
                   <label className="form-label small fw-semibold">Original Price (₹)</label>
                   <input
                     type="number"
+                    min="1"
                     value={editingProduct.originalPrice || ''}
                     onChange={(e) =>
                       setEditingProduct({
@@ -5595,22 +6039,198 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
 
-              {/* Upload image */}
+              {/* Upload image for Edit */}
+              <div className="p-3 bg-light rounded-3 border">
+                <label className="form-label small fw-semibold d-flex justify-content-between align-items-center mb-2">
+                  <span>Garment Image</span>
+                  <span className="badge bg-white text-dark border" style={{ fontSize: '0.68rem' }}>Cloudinary CDN</span>
+                </label>
+
+                {editingProduct.image && (
+                  <div className="d-flex align-items-center gap-3 p-2 bg-white rounded-3 border mb-2">
+                    <div style={{ position: 'relative', width: '64px', height: '80px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0, border: '1px solid #C5A880' }}>
+                      <img src={editingProduct.image} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                    <div className="flex-grow-1 overflow-hidden">
+                      <span className="small fw-semibold text-dark d-block text-truncate">Current Image</span>
+                      <small className="text-muted text-truncate d-block" style={{ fontSize: '0.72rem' }}>{editingProduct.image}</small>
+                    </div>
+                  </div>
+                )}
+
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <input
+                    type="file"
+                    id="editProdFileInput"
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, true)}
+                    className="d-none"
+                  />
+                  <label htmlFor="editProdFileInput" className="btn btn-sm btn-outline-dark d-inline-flex align-items-center gap-2" style={{ cursor: 'pointer' }}>
+                    <Upload size={14} />
+                    {uploadingImage ? 'Uploading new image...' : 'Upload New Image to Cloudinary'}
+                  </label>
+                  {uploadingImage && (
+                    <small className="text-primary d-flex align-items-center gap-1">
+                      <RefreshCw size={12} className="spin" /> Uploading...
+                    </small>
+                  )}
+                </div>
+
+                <div>
+                  <label className="form-label small text-muted mb-1" style={{ fontSize: '0.75rem' }}>Or Direct Image URL</label>
+                  <input
+                    type="text"
+                    value={editingProduct.image}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
+                    className="form-control form-control-sm"
+                    placeholder="Image URL"
+                  />
+                </div>
+
+                {/* Additional Multi-Angle Gallery Photos */}
+                <div className="mt-3 pt-2.5 border-top">
+                  <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                    <div>
+                      <label className="form-label small fw-semibold mb-0" style={{ fontSize: '0.82rem' }}>
+                        Additional Gallery Photos
+                      </label>
+                      <small className="text-muted d-block" style={{ fontSize: '0.72rem' }}>
+                        Optional multi-angle garment photos
+                      </small>
+                    </div>
+                    <label
+                      htmlFor="editGalleryInput"
+                      className="btn btn-sm d-inline-flex align-items-center gap-1.5 px-3 py-1 rounded-pill text-nowrap"
+                      style={{
+                        fontSize: '0.75rem',
+                        backgroundColor: '#FFFFFF',
+                        color: '#1A1816',
+                        border: '1px solid #C5A880',
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <Plus size={13} color="#9E7D47" />
+                      <span>Add Photos</span>
+                    </label>
+                    <input
+                      type="file"
+                      id="editGalleryInput"
+                      multiple
+                      accept="image/*"
+                      onChange={(e) => handleGalleryUpload(e, true)}
+                      className="d-none"
+                    />
+                  </div>
+                  {editingProduct.gallery && editingProduct.gallery.length > 0 && (
+                    <div className="d-flex flex-wrap gap-2 pt-1">
+                      {editingProduct.gallery.map((url, idx) => (
+                        <div key={idx} className="position-relative border rounded" style={{ width: '48px', height: '60px', overflow: 'hidden' }}>
+                          <img src={url} alt={`Gallery ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingProduct({
+                                ...editingProduct,
+                                gallery: editingProduct.gallery?.filter((_, i) => i !== idx),
+                              })
+                            }
+                            className="position-absolute top-0 end-0 bg-danger text-white border-0 p-0 d-flex align-items-center justify-content-center"
+                            style={{ width: '16px', height: '16px', fontSize: '10px' }}
+                            title="Remove Photo"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {uploadingGallery && (
+                    <div className="small text-primary mt-1" style={{ fontSize: '0.75rem' }}>
+                      <RefreshCw size={11} className="spin me-1" /> Uploading gallery images...
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sizes Selection with Responsive Spacing & Controls */}
               <div>
-                <label className="form-label small fw-semibold">Garment Image & Upload</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileUpload(e, true)}
-                  className="form-control mb-2"
-                />
-                <input
-                  type="text"
-                  value={editingProduct.image}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
-                  className="form-control form-control-sm"
-                  placeholder="Image URL"
-                />
+                <div className="d-flex justify-content-between align-items-center mb-1.5">
+                  <label className="form-label small fw-semibold mb-0">Available Sizes</label>
+                  <div className="d-flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingProduct({
+                          ...editingProduct,
+                          sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Free Size'],
+                        })
+                      }
+                      className="btn btn-link p-0 text-muted small text-decoration-none"
+                      style={{ fontSize: '0.72rem' }}
+                    >
+                      Select All
+                    </button>
+                    <span className="text-muted" style={{ fontSize: '0.72rem' }}>•</span>
+                    <button
+                      type="button"
+                      onClick={() => setEditingProduct({ ...editingProduct, sizes: [] })}
+                      className="btn btn-link p-0 text-muted small text-decoration-none"
+                      style={{ fontSize: '0.72rem' }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="d-flex flex-wrap align-items-center" style={{ gap: '8px' }}>
+                  {['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Free Size'].map((sz) => {
+                    const currentSizes = editingProduct.sizes || [];
+                    const isSelected = currentSizes.includes(sz);
+                    return (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setEditingProduct({
+                              ...editingProduct,
+                              sizes: currentSizes.filter((s) => s !== sz),
+                            });
+                          } else {
+                            setEditingProduct({
+                              ...editingProduct,
+                              sizes: [...currentSizes, sz],
+                            });
+                          }
+                        }}
+                        className="btn btn-sm d-inline-flex align-items-center justify-content-center fw-semibold"
+                        style={{
+                          minWidth: '42px',
+                          height: '34px',
+                          padding: '0 12px',
+                          borderRadius: '6px',
+                          fontSize: '0.78rem',
+                          backgroundColor: isSelected ? '#1A1816' : '#FFFFFF',
+                          color: isSelected ? '#FAF7F2' : '#332E2A',
+                          border: isSelected ? '1px solid #1A1816' : '1px solid #D5C7B5',
+                          boxShadow: isSelected ? '0 2px 5px rgba(0,0,0,0.18)' : '0 1px 2px rgba(0,0,0,0.04)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                        title={isSelected ? `Remove ${sz}` : `Add ${sz}`}
+                      >
+                        {sz}
+                      </button>
+                    );
+                  })}
+                </div>
+                <small className="text-muted mt-1 d-block" style={{ fontSize: '0.72rem' }}>
+                  Selected: {(editingProduct.sizes || []).length > 0 ? (editingProduct.sizes || []).join(', ') : 'None'}
+                </small>
               </div>
 
               <div>
@@ -5623,29 +6243,73 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div className="form-check">
-                <input
-                  type="checkbox"
-                  id="editFeaturedCheck"
-                  checked={editingProduct.isFeatured || false}
-                  onChange={(e) => setEditingProduct({ ...editingProduct, isFeatured: e.target.checked })}
-                  className="form-check-input"
-                />
-                <label htmlFor="editFeaturedCheck" className="form-check-label small fw-semibold">
-                  Feature on Homepage Showcase
-                </label>
+              <div className="row g-3">
+                <div className="col-4">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      id="editFeaturedCheck"
+                      checked={editingProduct.isFeatured || false}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, isFeatured: e.target.checked })}
+                      className="form-check-input"
+                    />
+                    <label htmlFor="editFeaturedCheck" className="form-check-label small fw-semibold">
+                      Featured
+                    </label>
+                  </div>
+                </div>
+                <div className="col-4">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      id="editNewArrivalCheck"
+                      checked={editingProduct.isNewArrival !== false}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, isNewArrival: e.target.checked })}
+                      className="form-check-input"
+                    />
+                    <label htmlFor="editNewArrivalCheck" className="form-check-label small fw-semibold">
+                      New Arrival
+                    </label>
+                  </div>
+                </div>
+                <div className="col-4">
+                  <div className="form-check">
+                    <input
+                      type="checkbox"
+                      id="editInStockCheck"
+                      checked={editingProduct.inStock !== false}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, inStock: e.target.checked })}
+                      className="form-check-input"
+                    />
+                    <label htmlFor="editInStockCheck" className="form-check-label small fw-semibold">
+                      In Stock
+                    </label>
+                  </div>
+                </div>
               </div>
 
               <div className="d-flex justify-content-end gap-2 pt-3 border-top mt-2">
-                <button type="button" onClick={() => setEditingProduct(null)} className="btn btn-outline-secondary">
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  className="btn btn-outline-secondary"
+                  disabled={isSubmittingEdit}
+                >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn text-dark fw-bold px-4"
+                  disabled={isSubmittingEdit || uploadingImage}
+                  className="btn text-dark fw-bold px-4 d-flex align-items-center gap-2"
                   style={{ backgroundColor: '#C5A880' }}
                 >
-                  Save Changes
+                  {isSubmittingEdit ? (
+                    <>
+                      <RefreshCw size={14} className="spin" /> Saving Changes...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
                 </button>
               </div>
             </form>

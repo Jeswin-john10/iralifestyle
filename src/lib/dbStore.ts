@@ -1,12 +1,11 @@
 import mongoose from 'mongoose';
 import { connectToDatabase } from './mongodb';
 import { ProductModel, OrderModel, InquiryModel, NewsletterModel, ReviewModel, CategoryModel, CustomerModel } from './models';
-import { INITIAL_PRODUCTS, CATEGORIES } from '@/data/initialData';
 import { Product, Order, Inquiry, Review, Category, CustomerUser } from '@/types';
 
 // In-memory persistent state for development or zero-config fallback
-let memoryProducts: Product[] = [...INITIAL_PRODUCTS];
-let memoryCategories: Category[] = [...CATEGORIES];
+let memoryProducts: Product[] = [];
+let memoryCategories: Category[] = [];
 let memoryOrders: Order[] = [];
 let memoryInquiries: Inquiry[] = [];
 let memoryNewsletters: Array<{ email: string; createdAt: string }> = [];
@@ -16,24 +15,7 @@ export async function getProducts(filter?: { category?: string; featured?: boole
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      // 1. Remove obsolete dummy products
-      const dummyIds = ['ira-101', 'ira-102', 'ira-103', 'ira-104', 'ira-105', 'ira-106'];
-      await ProductModel.deleteMany({ id: { $in: dummyIds } });
-
-      // 2. Upsert authentic 14 boutique categories products (preserving realtime rating/reviews)
-      for (const p of INITIAL_PRODUCTS) {
-        const { rating, reviewsCount, ...restOfProduct } = p;
-        await ProductModel.updateOne(
-          { id: p.id },
-          { 
-            $set: restOfProduct,
-            $setOnInsert: { rating: 0, reviewsCount: 0 }
-          },
-          { upsert: true }
-        );
-      }
-
-      // 3. Build search query
+      // Build search query from database
       const query: Record<string, unknown> = {};
       if (filter?.category && filter.category !== 'all') {
         const catFilter = filter.category.trim();
@@ -45,7 +27,7 @@ export async function getProducts(filter?: { category?: string; featured?: boole
       }
       if (filter?.featured) query.isFeatured = true;
 
-      const docs = await ProductModel.find(query).lean();
+      const docs = await ProductModel.find(query).sort({ createdAt: -1 }).lean();
       return docs.map(doc => ({
         ...doc,
         id: doc.id || (doc._id as unknown as string).toString(),
@@ -57,7 +39,7 @@ export async function getProducts(filter?: { category?: string; featured?: boole
   }
 
   // Memory fallback
-  let list = [...INITIAL_PRODUCTS];
+  let list = [...memoryProducts];
   if (filter?.category && filter.category !== 'all') {
     const cat = filter.category.toLowerCase().trim();
     list = list.filter(p => 
@@ -96,28 +78,33 @@ export async function getProductByIdOrSlug(identifier: string): Promise<Product 
 }
 
 export async function createProduct(productData: Partial<Product>): Promise<Product> {
+  const baseSlug = (productData.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `prod-${Date.now()}`);
+  const uniqueSuffix = Date.now().toString().slice(-4);
+  const safeSlug = productData.slug ? productData.slug.toLowerCase().replace(/[^a-z0-9]+/g, '-') : `${baseSlug}-${uniqueSuffix}`;
+
+  const defaultImg = productData.image || '/images/cat_dress.jpg';
   const newProduct: Product = {
-    id: `ira-${Date.now()}`,
-    slug: productData.slug || (productData.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') || `prod-${Date.now()}`),
+    id: productData.id || `ira-${Date.now()}`,
+    slug: safeSlug,
     title: productData.title || 'Untitled Luxury Garment',
     category: productData.category || 'dresses',
     categoryLabel: productData.categoryLabel || 'Dresses',
     price: Number(productData.price) || 2499,
     originalPrice: productData.originalPrice ? Number(productData.originalPrice) : undefined,
-    rating: 0,
-    reviewsCount: 0,
-    image: productData.image || '/images/cat_dress.jpg',
-    gallery: productData.gallery || [productData.image || '/images/cat_dress.jpg'],
+    rating: productData.rating || 5,
+    reviewsCount: productData.reviewsCount || 0,
+    image: defaultImg,
+    gallery: productData.gallery && productData.gallery.length > 0 ? productData.gallery : [defaultImg],
     description: productData.description || 'Exclusive luxury ethnic attire crafted for timeless grace.',
     features: productData.features || ['Premium fabric', 'Handcrafted details'],
     fabric: productData.fabric || 'Pure Silk Blend',
     care: productData.care || 'Dry clean only',
     sizes: productData.sizes && productData.sizes.length ? productData.sizes : ['S', 'M', 'L', 'XL'],
-    colors: productData.colors || ['Gold', 'Emerald'],
+    colors: productData.colors && productData.colors.length ? productData.colors : ['Gold', 'Emerald'],
     inStock: productData.inStock !== undefined ? productData.inStock : true,
     isFeatured: !!productData.isFeatured,
-    isNewArrival: !!productData.isNewArrival,
-    bestseller: false,
+    isNewArrival: productData.isNewArrival !== undefined ? !!productData.isNewArrival : true,
+    bestseller: !!productData.bestseller,
   };
 
   try {
@@ -427,61 +414,108 @@ export async function syncProductRatingAndReviews(productId: string): Promise<vo
 }
 
 export async function createReview(reviewData: Partial<Review>): Promise<Review> {
-  const newRev: Review = {
-    _id: `rev-${Date.now()}`,
-    productId: reviewData.productId || '',
-    productTitle: reviewData.productTitle || '',
-    productImage: reviewData.productImage || '',
-    customerName: reviewData.customerName || 'Anonymous Client',
-    customerEmail: reviewData.customerEmail || 'client@iralifestyle.com',
-    rating: Number(reviewData.rating) || 5,
-    comment: reviewData.comment || '',
-    verifiedPurchase: true,
-    status: 'approved',
-    createdAt: new Date().toISOString(),
+  let productId = reviewData.productId || '';
+  let productTitle = reviewData.productTitle || '';
+  let productImage = reviewData.productImage || '';
+
+  // Look up product to resolve canonical id, title, and image
+  try {
+    const conn = await connectToDatabase();
+    if (conn && productId) {
+      const prod = await ProductModel.findOne({
+        $or: [
+          ...(mongoose.Types.ObjectId.isValid(productId) ? [{ _id: new mongoose.Types.ObjectId(productId) }] : []),
+          { id: productId },
+          { slug: productId }
+        ]
+      }).lean();
+      if (prod) {
+        productId = prod.id || productId;
+        productTitle = productTitle || prod.title;
+        productImage = productImage || prod.image;
+      }
+    }
+  } catch (err) {
+    console.warn('MongoDB createReview product lookup fallback:', err);
+  }
+
+  const reviewPayload = {
+    productId,
+    productTitle: productTitle || 'IRA Royal Garment',
+    productImage: productImage || '',
+    customerName: reviewData.customerName?.trim() || 'Anonymous Client',
+    customerEmail: reviewData.customerEmail?.trim() || 'client@iralifestyle.com',
+    rating: Math.min(5, Math.max(1, Number(reviewData.rating) || 5)),
+    comment: reviewData.comment?.trim() || '',
+    verifiedPurchase: reviewData.verifiedPurchase !== false,
+    status: reviewData.status || 'approved',
   };
 
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      const doc = await ReviewModel.create(newRev);
-      const saved = doc.toObject() as unknown as Review;
-      await syncProductRatingAndReviews(newRev.productId);
+      // NOTE: Do not pass custom string _id so Mongoose automatically creates valid ObjectId
+      const doc = await ReviewModel.create(reviewPayload);
+      const strId = doc._id.toString();
+      await syncProductRatingAndReviews(productId);
       return {
-        ...saved,
-        _id: (doc._id as unknown as string).toString(),
+        _id: strId,
+        id: strId,
+        productId: doc.productId,
+        productTitle: doc.productTitle,
+        productImage: doc.productImage,
+        customerName: doc.customerName,
+        customerEmail: doc.customerEmail,
+        rating: doc.rating,
+        comment: doc.comment,
+        verifiedPurchase: doc.verifiedPurchase,
+        status: (doc.status as any) || 'approved',
+        createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : new Date().toISOString(),
       };
     }
   } catch (err) {
     console.warn('MongoDB createReview fallback:', err);
   }
 
-  memoryReviews.unshift(newRev);
-  await syncProductRatingAndReviews(newRev.productId);
-  return newRev;
+  const fallbackRev: Review = {
+    _id: `rev-${Date.now()}`,
+    id: `rev-${Date.now()}`,
+    ...reviewPayload,
+    createdAt: new Date().toISOString(),
+  };
+  memoryReviews.unshift(fallbackRev);
+  await syncProductRatingAndReviews(productId);
+  return fallbackRev;
 }
 
 export async function getReviews(productId?: string): Promise<Review[]> {
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      // Clean up any legacy dummy reviews
-      await ReviewModel.deleteMany({
-        $or: [
-          { _id: { $in: ['rev-101', 'rev-102', 'rev-103'] } },
-          { customerEmail: { $in: ['pooja.menon@gmail.com', 'naveen.nambiar@gmail.com', 'divya.krishnan@gmail.com'] } },
-          { customerName: { $in: ['Pooja Menon', 'Naveen Nambiar', 'Divya Krishnan'] } }
-        ]
-      });
+      // Clean up any legacy dummy reviews safely via native collection or email/name
+      try {
+        await ReviewModel.collection.deleteMany({
+          $or: [
+            { customerEmail: { $in: ['pooja.menon@gmail.com', 'naveen.nambiar@gmail.com', 'divya.krishnan@gmail.com', 'dummy@example.com'] } },
+            { customerName: { $in: ['Pooja Menon', 'Naveen Nambiar', 'Divya Krishnan', 'Dummy Reviewer'] } }
+          ]
+        });
+      } catch {
+        // ignore
+      }
 
-      let filter: any = {};
-      if (productId) {
+      let filter: Record<string, unknown> = {};
+      if (productId && productId !== 'all') {
         const prod = await ProductModel.findOne({
-          $or: [{ id: productId }, { slug: productId }]
+          $or: [
+            ...(mongoose.Types.ObjectId.isValid(productId) ? [{ _id: new mongoose.Types.ObjectId(productId) }] : []),
+            { id: productId },
+            { slug: productId }
+          ]
         }).lean();
 
         if (prod) {
-          const ids: string[] = [productId, prod.id, prod.slug].filter((x): x is string => Boolean(x));
+          const ids: string[] = [productId, prod.id, prod.slug, (prod._id as any)?.toString()].filter((x): x is string => Boolean(x));
           filter = { productId: { $in: ids } };
         } else {
           filter = { productId };
@@ -492,13 +526,15 @@ export async function getReviews(productId?: string): Promise<Review[]> {
       return docs.map(d => ({
         ...d,
         _id: (d._id as unknown as string).toString(),
+        id: (d._id as unknown as string).toString(),
+        createdAt: d.createdAt ? new Date(d.createdAt).toISOString() : new Date().toISOString(),
       })) as unknown as Review[];
     }
   } catch (err) {
     console.warn('MongoDB getReviews fallback:', err);
   }
 
-  if (productId) {
+  if (productId && productId !== 'all') {
     const prod = memoryProducts.find(p => p.id === productId || p.slug === productId);
     const ids = prod ? [productId, prod.id, prod.slug].filter(Boolean) : [productId];
     return memoryReviews.filter(r => ids.includes(r.productId));
@@ -511,15 +547,26 @@ export async function deleteReview(id: string): Promise<boolean> {
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      const existing = await ReviewModel.findById(id).lean();
+      let existing: any = null;
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        existing = await ReviewModel.findById(id).lean();
+      }
+      if (!existing) {
+        existing = await ReviewModel.findOne({ $or: [{ _id: id }, { id: id }] }).lean();
+      }
       if (existing) {
         productId = existing.productId;
       }
-      await ReviewModel.deleteOne({ _id: id });
+
+      const filter = mongoose.Types.ObjectId.isValid(id)
+        ? { _id: new mongoose.Types.ObjectId(id) }
+        : { $or: [{ _id: id }, { id: id }] };
+
+      const res = await ReviewModel.deleteOne(filter);
       if (productId) {
         await syncProductRatingAndReviews(productId);
       }
-      return true;
+      return (res.deletedCount || 0) > 0;
     }
   } catch (err) {
     console.warn('MongoDB deleteReview fallback:', err);
@@ -542,11 +589,22 @@ export async function updateReviewStatus(id: string, status: string): Promise<bo
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      const existing = await ReviewModel.findById(id).lean();
+      let existing: any = null;
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        existing = await ReviewModel.findById(id).lean();
+      }
+      if (!existing) {
+        existing = await ReviewModel.findOne({ $or: [{ _id: id }, { id: id }] }).lean();
+      }
       if (existing) {
         productId = existing.productId;
       }
-      await ReviewModel.updateOne({ _id: id }, { $set: { status } });
+
+      const filter = mongoose.Types.ObjectId.isValid(id)
+        ? { _id: new mongoose.Types.ObjectId(id) }
+        : { $or: [{ _id: id }, { id: id }] };
+
+      await ReviewModel.updateOne(filter, { $set: { status } });
       if (productId) {
         await syncProductRatingAndReviews(productId);
       }
@@ -571,15 +629,7 @@ export async function getCategories(): Promise<Category[]> {
   try {
     const conn = await connectToDatabase();
     if (conn) {
-      // Sync all 14 categories with updated images and metadata
-      for (const cat of CATEGORIES) {
-        await CategoryModel.updateOne(
-          { slug: cat.slug },
-          { $set: { name: cat.name, image: cat.image, tagline: cat.tagline, itemCount: cat.itemCount } },
-          { upsert: true }
-        );
-      }
-      const docs = await CategoryModel.find().lean();
+      const docs = await CategoryModel.find().sort({ name: 1 }).lean();
       return docs.map(doc => ({
         id: doc.id || (doc._id as unknown as string).toString(),
         name: doc.name,
@@ -592,7 +642,7 @@ export async function getCategories(): Promise<Category[]> {
   } catch (err) {
     console.warn('MongoDB getCategories fallback:', err);
   }
-  return CATEGORIES;
+  return memoryCategories;
 }
 
 export async function createCategory(catData: Partial<Category>): Promise<Category> {

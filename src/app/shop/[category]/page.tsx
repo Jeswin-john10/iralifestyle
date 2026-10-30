@@ -4,8 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
-import { Product } from '@/types';
-import { CATEGORIES, INITIAL_PRODUCTS } from '@/data/initialData';
+import { Product, Category } from '@/types';
 import { useCart } from '@/context/CartContext';
 import { Star, Heart, Eye } from 'lucide-react';
 import QuickViewModal from '@/components/QuickViewModal';
@@ -15,11 +14,9 @@ function CategoryContent() {
   const params = useParams();
   const categorySlug = (params.category as string) || '';
   const { toggleWishlist, isInWishlist } = useCart();
-  const [categories, setCategories] = useState(CATEGORIES);
-  const [products, setProducts] = useState<Product[]>(() =>
-    INITIAL_PRODUCTS.filter((p) => p.category.toLowerCase() === categorySlug.toLowerCase())
-  );
-  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
   useEffect(() => {

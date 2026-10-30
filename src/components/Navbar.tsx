@@ -15,7 +15,7 @@ import {
   X, 
   ChevronDown 
 } from 'lucide-react';
-import { InstagramIcon, FacebookIcon, YoutubeIcon } from './SocialIcons';
+import { InstagramIcon, FacebookIcon, LinkedinIcon, WhatsappIcon } from './SocialIcons';
 import SearchModal from './SearchModal';
 
 export default function Navbar() {
@@ -105,14 +105,17 @@ export default function Navbar() {
           <div className="d-flex align-items-center gap-3">
             <span className="d-none d-lg-inline text-muted" style={{ fontSize: '0.68rem' }}>Follow us</span>
             <div className="d-flex align-items-center gap-2">
-              <a href="https://instagram.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="Instagram">
+              <a href="https://instagram.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="Instagram" title="Instagram">
                 <InstagramIcon size={13} />
               </a>
-              <a href="https://facebook.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="Facebook">
+              <a href="https://facebook.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="Facebook" title="Facebook">
                 <FacebookIcon size={13} />
               </a>
-              <a href="https://youtube.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="YouTube">
-                <YoutubeIcon size={13} />
+              <a href="https://linkedin.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="LinkedIn" title="LinkedIn">
+                <LinkedinIcon size={13} />
+              </a>
+              <a href="https://wa.me/919995466002" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="WhatsApp" title="WhatsApp">
+                <WhatsappIcon size={13} />
               </a>
             </div>
           </div>
@@ -418,10 +421,19 @@ export default function Navbar() {
 
             <div className="pt-3 border-top text-center text-muted" style={{ fontSize: '0.75rem' }}>
               <p className="mb-2">Elegance In Every Thread</p>
-              <div className="d-flex justify-content-center gap-3">
-                <InstagramIcon size={16} />
-                <FacebookIcon size={16} />
-                <YoutubeIcon size={16} />
+              <div className="d-flex justify-content-center align-items-center gap-3">
+                <a href="https://instagram.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="Instagram">
+                  <InstagramIcon size={16} />
+                </a>
+                <a href="https://facebook.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="Facebook">
+                  <FacebookIcon size={16} />
+                </a>
+                <a href="https://linkedin.com" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="LinkedIn">
+                  <LinkedinIcon size={16} />
+                </a>
+                <a href="https://wa.me/919995466002" target="_blank" rel="noreferrer" className="text-secondary hover-gold" aria-label="WhatsApp">
+                  <WhatsappIcon size={16} />
+                </a>
               </div>
             </div>
           </div>

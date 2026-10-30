@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Product } from '@/types';
-import { CATEGORIES, INITIAL_PRODUCTS } from '@/data/initialData';
+import { Product, Category } from '@/types';
 import { useCart } from '@/context/CartContext';
 import { Star, Heart, Eye, Filter, ArrowUpDown, Check, ChevronLeft, ChevronRight, X, RotateCcw } from 'lucide-react';
 import QuickViewModal from '@/components/QuickViewModal';
@@ -13,7 +12,7 @@ import ProductCard from '@/components/ProductCard';
 export default function ShopPage() {
   const { toggleWishlist, isInWishlist } = useCart();
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState(CATEGORIES);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('featured');

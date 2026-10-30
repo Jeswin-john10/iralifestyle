@@ -1,5 +1,5 @@
 import { MetadataRoute } from 'next';
-import { INITIAL_PRODUCTS, CATEGORIES } from '@/data/initialData';
+import { getProducts, getCategories } from '@/lib/dbStore';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://iralifestyle.com';
@@ -57,17 +57,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  // Category Routes
-  const categoryRoutes: MetadataRoute.Sitemap = CATEGORIES.map((cat) => ({
+  // Dynamic Category Routes from Database
+  let categories: any[] = [];
+  try {
+    categories = await getCategories();
+  } catch {}
+
+  const categoryRoutes: MetadataRoute.Sitemap = categories.map((cat) => ({
     url: `${baseUrl}/shop/${cat.slug}`,
     lastModified: currentDate,
     changeFrequency: 'daily',
     priority: 0.8,
   }));
 
-  // Product Routes
-  const productRoutes: MetadataRoute.Sitemap = INITIAL_PRODUCTS.map((prod) => ({
-    url: `${baseUrl}/product/${prod.id}`,
+  // Dynamic Product Routes from Database
+  let products: any[] = [];
+  try {
+    products = await getProducts();
+  } catch {}
+
+  const productRoutes: MetadataRoute.Sitemap = products.map((prod) => ({
+    url: `${baseUrl}/product/${prod.id || prod.slug}`,
     lastModified: currentDate,
     changeFrequency: 'weekly',
     priority: 0.8,
